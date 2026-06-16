@@ -19,3 +19,7 @@
 - Teileablage liegt rechts neben dem Board als separater Tray; nur dieser Tray darf bei vielen Teilen intern scrollen.
 - Rotation erfolgt ausschließlich in 90°-Schritten, um die Bedienung puzzletypisch und vorhersagbar zu halten.
 - Puzzlemodus ist als Vollbild-Overlay umgesetzt; ESC oder X führen zurück zum Dashboard.
+
+- Die rechte Puzzleablage ist bewusst ein überlappender Teilehaufen, damit sie sich wie ein echtes Puzzle anfühlt und weniger Raster-/Listencharakter hat.
+- Das Referenzbild im Puzzleboard kann ausgeblendet werden, um den Schwierigkeitsgrad direkt im Spiel zu erhöhen.
+- Darkmode wird clientseitig per `body[data-theme]` und `localStorage` umgesetzt; die Position des Toggles ist links unten oberhalb des Nutzerprofils.

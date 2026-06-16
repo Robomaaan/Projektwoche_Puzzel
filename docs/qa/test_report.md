@@ -140,3 +140,26 @@ Erneut ausgeführt:
 - `npm run test` PASS, Backend 4/4, Frontend 1/1
 - `npm run build` PASS
 - Browser-Smoke: Vollbildklasse aktiv, X-Button vorhanden, rechte Ablage vorhanden, Workspace overflow hidden, ESC führt zurück zum Dashboard.
+
+
+## Nacharbeit Teilehaufen / Bildausblendung / Soft-Darkmode - 2026-06-15
+
+Zusätzliche Nutzeranforderungen umgesetzt:
+
+- Rechte Ablage ist jetzt ein Teilehaufen statt geordneter Rasterablage.
+- Neue Puzzle-Teile starten übereinander/versetzt im rechten grünen Bereich mit 0/90/180/270°-Rotation.
+- Button `Teilehaufen neu mischen` legt alle nicht gesetzten Teile wieder in den Haufen.
+- Linker Puzzle-/Bildbereich ist visuell mit rotem Akzent markiert.
+- Rechter Teilehaufenbereich ist visuell mit grünem Akzent markiert.
+- Button `Puzzlebild ausblenden/einblenden` schaltet das sichtbare Referenzbild im Board um.
+- Soft-Darkmode hinzugefügt.
+- Dark/Light-Schieberegler sitzt links unten in der Sidebar direkt über dem Nutzerprofil.
+- Toggle hat animierten Knob und persistiert via `localStorage`.
+
+Erneut ausgeführt:
+
+- `npm run typecheck` PASS
+- `npm run lint` PASS
+- `npm run test` PASS, Backend 4/4, Frontend 1/1
+- `npm run build` PASS
+- Browser-Smoke: Darkmode Toggle schaltet auf `body[data-theme=dark]`, Teilehaufen sichtbar, Preview-Ausblendung setzt `target hidden-preview`.
