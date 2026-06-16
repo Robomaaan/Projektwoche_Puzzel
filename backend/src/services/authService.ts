@@ -23,7 +23,6 @@ export async function register(email: string, password: string, displayName: str
 }
 export async function login(email: string, password: string) {
   const user = await prisma.userAccount.findUnique({ where: { email: email.toLowerCase() } });
-  if (!user || !(await argon2.verify(user.passwordHash, password))) Object.assign(new Error('Ungültige Zugangsdaten'), { status: 401 });
   if (!user) throw Object.assign(new Error('Ungültige Zugangsdaten'), { status: 401 });
   const ok = await argon2.verify(user.passwordHash, password);
   if (!ok) throw Object.assign(new Error('Ungültige Zugangsdaten'), { status: 401 });
