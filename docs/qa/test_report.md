@@ -182,3 +182,22 @@ Erneut ausgeführt:
 - `npm run test` PASS, Backend 4/4, Frontend 1/1
 - `npm run build` PASS
 - Browser-Smoke: rechter Tray ~25% Breite, Puzzlebereich links ~75%, Haufen-Button vorhanden, Toggle-Margin ~3mm.
+
+
+## Nacharbeit Tray-Koordinaten und Zoom-Skalierung der Teile - 2026-06-15
+
+Zusätzliche Nutzeranforderungen umgesetzt:
+
+- Nicht platzierte Puzzleteile werden beim Laden/Mischen in den rechten Teilehaufenbereich normalisiert, wenn alte gespeicherte Positionen außerhalb des Trays lagen.
+- Teilehaufen-Koordinaten werden aus der aktuellen Workspace-/Tray-Breite berechnet statt aus einer starren X-Position.
+- Puzzleteile skalieren jetzt visuell mit dem Zoom des Puzzles.
+- Bereits platzierte Teile werden beim Zoom an ihre skalierten Zielpositionen gerendert, damit sie auf dem Board ausgerichtet bleiben.
+- Snap-Zielpositionen berücksichtigen den aktuellen Zoomfaktor.
+
+Erneut ausgeführt:
+
+- `npm run typecheck` PASS
+- `npm run lint` PASS
+- `npm run test` PASS, Backend 4/4, Frontend 1/1
+- `npm run build` PASS
+- Browser-Smoke: 16/16 neue Teile im rechten Traybereich; Zoom von 100% auf 110% vergrößert ein Teil von 297px auf 326.7px.

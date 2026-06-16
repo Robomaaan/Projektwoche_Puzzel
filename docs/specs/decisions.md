@@ -27,3 +27,6 @@
 - Der Button `Teilehaufen neu mischen` darf eingerastete Teile nicht mehr zurück in den Haufen legen; platzierte Teile gelten als stabiler Fortschritt.
 - Das Vollbild-Puzzlelayout priorisiert das Board mit ca. 75% Breite und begrenzt den Teilehaufen auf ca. 25%.
 - Der Theme-Toggle sitzt optisch knapp oberhalb des Profils, mit ca. 3mm Abstand.
+
+- Die Teilehaufenpositionen werden aus der aktuellen Workspace-/Tray-Geometrie berechnet; alte gespeicherte unplatzierte Teile außerhalb des Trays werden beim Öffnen zurück in den Haufen normalisiert.
+- Zoom verändert nicht nur das Referenzbild, sondern auch die visuelle Größe der Puzzleteile und die Snap-Zielpositionen.
