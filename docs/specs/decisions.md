@@ -9,3 +9,8 @@
 - Nach Nutzerfeedback werden keine Fake-KPIs oder Fake-Beispielbilder mehr angezeigt; Dashboard und Bildverwaltung basieren ausschließlich auf DB-Daten.
 - Öffentliche Puzzle-Projekte sind sichtbar/spielbar für alle eingeloggten Nutzer, Fortschritte bleiben aber pro Nutzer getrennt.
 - Puzzle-Interaktion nutzt Drag-and-drop plus Scrollrad-Rotation des ausgewählten Teils; Einrasten setzt nahe Zielposition und Rotation nahe 0° voraus.
+
+- Jigsaw-Formen werden frontendseitig als SVG-ClipPaths aus dem Gesamtpreview berechnet; dadurch können Noppen/Einbuchtungen perfekt komplementär sein, ohne zusätzliche serverseitige Maskendateien.
+- Der Akzeptanzbereich bleibt als UI-Slider einstellbar, weil die gewünschte Toleranz noch feinjustiert werden soll.
+- Eingerastete Teile werden grün markiert; Snap erfolgt nur bei Nähe zur Zielposition und Rotation nahe 0°.
+- Die Teileablage liegt unter dem Board statt rechts daneben, damit große Puzzleteile nicht in einer schmalen Spalte unbedienbar stapeln.

@@ -96,3 +96,26 @@ Erneut ausgeführt:
 - `npm run test` PASS, Backend 4/4, Frontend 1/1
 - `npm run build` PASS
 - Browser-Konsole ohne JS-Errors
+
+
+## Nacharbeit echte Jigsaw-Schnittformen / Akzeptanzbereich / Ablage - 2026-06-15
+
+Zusätzliche Anforderungen umgesetzt:
+
+- Puzzleteile werden in der Spielansicht als SVG-Jigsaw-Formen gerendert.
+- Innere Kanten verwenden deterministische Tab-/Blank-Logik, sodass Nachbarteile komplementäre Noppen/Einbuchtungen haben.
+- Außenkanten bleiben gerade.
+- Jedes Teil nutzt denselben Bildausschnitt aus dem Gesamtbild mit ClipPath, damit die Teile visuell zusammenpassen.
+- Akzeptanzbereich ist in der UI regelbar, Startwert 42px.
+- Wenn ein Teil nahe genug am Ziel liegt und fast korrekt rotiert ist, dreht es automatisch auf 0° und rastet an Zielposition ein.
+- Eingerastete Teile werden grün hervorgehoben und zählen im Fortschritt.
+- Teileablage wurde von der seitlichen engen Spalte auf einen sichtbaren Ablagebereich unter dem Board umgebaut.
+- Button „Teile neu ordnen“ legt die Teile übersichtlicher im Ablagebereich aus.
+
+Erneut ausgeführt:
+
+- `npm run typecheck` PASS
+- `npm run lint` PASS
+- `npm run test` PASS, Backend 4/4, Frontend 1/1
+- `npm run build` PASS
+- Browser-Visual-Smoke: SVG-Jigsaw-Teile sichtbar, Ablage sichtbar, keine JS-Errors.

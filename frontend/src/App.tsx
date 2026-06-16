@@ -75,22 +75,88 @@ function Puzzles({ user, projects, images, refresh, nav, setActiveProject, setEr
 }
 function PuzzleCard({ p, onClick, onDelete, currentUserId }: any) { return <div className="pcard" onClick={onClick}>{p.generated?.previewUrl && <img src={'http://localhost:8000' + p.generated.previewUrl} />}<b>{p.title}</b><span className={p.visibility === 'public' ? 'pill green' : 'pill purple'}>{p.visibility === 'public' ? 'Für alle Nutzer' : 'Privat'}</span><small>{p.ownerId === currentUserId ? 'Eigenes Puzzle' : 'Öffentliches Puzzle'} · {Math.round(p.savedState?.progressPercent ?? 0)}% Fortschritt</small>{onDelete && <button onClick={(e) => { e.stopPropagation(); onDelete(); }}>Löschen</button>}</div>; }
 
+
+function edgeSign(a: number, b: number) { return ((a * 37 + b * 17 + 11) % 2 === 0) ? 1 : -1; }
+function pieceTabs(pc: Piece, rows: number, columns: number) {
+  return {
+    top: pc.row === 0 ? 0 : -edgeSign(pc.row - 1, pc.column),
+    right: pc.column === columns - 1 ? 0 : edgeSign(pc.row, pc.column),
+    bottom: pc.row === rows - 1 ? 0 : edgeSign(pc.row, pc.column + 1000),
+    left: pc.column === 0 ? 0 : -edgeSign(pc.row, pc.column - 1),
+  };
+}
+function edgePath(side: 'top' | 'right' | 'bottom' | 'left', sign: number, w: number, h: number, k: number) {
+  const neck = side === 'top' || side === 'bottom' ? w * 0.34 : h * 0.34;
+  const neck2 = side === 'top' || side === 'bottom' ? w * 0.66 : h * 0.66;
+  const mid = side === 'top' || side === 'bottom' ? w * 0.5 : h * 0.5;
+  const r = side === 'top' || side === 'bottom' ? w * 0.16 : h * 0.16;
+  if (sign === 0) {
+    if (side === 'top') return `L ${k + w} ${k}`;
+    if (side === 'right') return `L ${k + w} ${k + h}`;
+    if (side === 'bottom') return `L ${k} ${k + h}`;
+    return `L ${k} ${k}`;
+  }
+  if (side === 'top') {
+    const y = k, out = y - sign * k * 0.92;
+    return `L ${k + neck} ${y} C ${k + neck} ${y} ${k + mid - r} ${out} ${k + mid} ${out} C ${k + mid + r} ${out} ${k + neck2} ${y} ${k + neck2} ${y} L ${k + w} ${y}`;
+  }
+  if (side === 'right') {
+    const x = k + w, out = x + sign * k * 0.92;
+    return `L ${x} ${k + neck} C ${x} ${k + neck} ${out} ${k + mid - r} ${out} ${k + mid} C ${out} ${k + mid + r} ${x} ${k + neck2} ${x} ${k + neck2} L ${x} ${k + h}`;
+  }
+  if (side === 'bottom') {
+    const y = k + h, out = y + sign * k * 0.92;
+    return `L ${k + neck2} ${y} C ${k + neck2} ${y} ${k + mid + r} ${out} ${k + mid} ${out} C ${k + mid - r} ${out} ${k + neck} ${y} ${k + neck} ${y} L ${k} ${y}`;
+  }
+  const x = k, out = x - sign * k * 0.92;
+  return `L ${x} ${k + neck2} C ${x} ${k + neck2} ${out} ${k + mid + r} ${out} ${k + mid} C ${out} ${k + mid - r} ${x} ${k + neck} ${x} ${k + neck} L ${x} ${k}`;
+}
+function piecePath(pc: Piece, rows: number, columns: number, w: number, h: number, k: number) {
+  const t = pieceTabs(pc, rows, columns);
+  return `M ${k} ${k} ${edgePath('top', t.top, w, h, k)} ${edgePath('right', t.right, w, h, k)} ${edgePath('bottom', t.bottom, w, h, k)} ${edgePath('left', t.left, w, h, k)} Z`;
+}
+function PieceSvg({ pc, st, pieceW, pieceH, knob, rows, columns, previewUrl, selected, onPointerDown, onPointerMove, onPointerUp, onDoubleClick }: any) {
+  const path = piecePath(pc, rows, columns, pieceW, pieceH, knob);
+  const clipId = `clip-${pc.id}`;
+  return <svg className={(selected ? 'dragpiece selected' : 'dragpiece') + (st?.placed ? ' placed' : '')} style={{ left: (st?.x ?? pc.currentX) - knob, top: (st?.y ?? pc.currentY) - knob, width: pieceW + knob * 2, height: pieceH + knob * 2, transform: `rotate(${st?.rotation ?? 0}deg)` }} viewBox={`0 0 ${pieceW + knob * 2} ${pieceH + knob * 2}`} onPointerDown={onPointerDown} onPointerMove={onPointerMove} onPointerUp={onPointerUp} onDoubleClick={onDoubleClick}>
+    <defs><clipPath id={clipId}><path d={path} /></clipPath></defs>
+    <image href={previewUrl} x={-(pc.column * pieceW) + knob} y={-(pc.row * pieceH) + knob} width={900} height={600} clipPath={`url(#${clipId})`} preserveAspectRatio="none" />
+    <path d={path} className="piece-outline" />
+  </svg>;
+}
+
 function Play({ project, refresh, nav, setError }: any) {
-  const pieces = project.generated?.pieces ?? []; const cfg = project.configuration ?? { rows: 4, columns: 4 }; const pieceW = 900 / cfg.columns, pieceH = 600 / cfg.rows; const snap = parseSnapshot(project);
-  const [zoom, setZoom] = useState(Math.round((snap.zoom ?? 1) * 100)); const [seconds, setSeconds] = useState(snap.timerSeconds ?? 0); const [saved, setSaved] = useState('Bereit'); const [selected, setSelected] = useState<string | null>(snap.selectedPieceId ?? null); const drag = useRef<{ id: string; dx: number; dy: number } | null>(null);
-  const [pieceStates, setPieceStates] = useState<Record<string, PieceState>>(() => Object.fromEntries(pieces.map((p: Piece) => [p.id, { x: snap.pieces?.[p.id]?.x ?? p.currentX, y: snap.pieces?.[p.id]?.y ?? p.currentY, rotation: snap.pieces?.[p.id]?.rotation ?? 0, placed: snap.pieces?.[p.id]?.placed ?? false }] as const)));
-  useEffect(() => { const t = setInterval(() => setSeconds((s: number) => s + 1), 1000); return () => clearInterval(t); }, []);
+  const pieces = project.generated?.pieces ?? [];
+  const cfg = project.configuration ?? { rows: 4, columns: 4 };
+  const pieceW = 900 / cfg.columns, pieceH = 600 / cfg.rows;
+  const knob = Math.min(pieceW, pieceH) * 0.24;
+  const snap = parseSnapshot(project);
+  const previewUrl = `http://localhost:8000${project.generated?.previewUrl}`;
+  const [zoom, setZoom] = useState(Math.round((snap.zoom ?? 0.78) * 100));
+  const [seconds, setSeconds] = useState(snap.timerSeconds ?? 0);
+  const [saved, setSaved] = useState('Bereit');
+  const [selected, setSelected] = useState<string | null>(snap.selectedPieceId ?? null);
+  const [tolerance, setTolerance] = useState(snap.tolerance ?? 42);
+  const drag = useRef<{ id: string; dx: number; dy: number } | null>(null);
+  const trayCols = pieceW > 150 ? 3 : Math.max(4, Math.min(10, Math.ceil(Math.sqrt(pieces.length * 1.8))));
+  const trayX = 24, trayY = 650, trayGapX = Math.max(78, Math.min(285, pieceW + knob * 1.15)), trayGapY = Math.max(72, Math.min(245, pieceH + knob * 0.95));
+  const [pieceStates, setPieceStates] = useState<Record<string, PieceState>>(() => Object.fromEntries(pieces.map((p: Piece, idx: number) => [p.id, { x: snap.pieces?.[p.id]?.x ?? trayX + (idx % trayCols) * trayGapX, y: snap.pieces?.[p.id]?.y ?? trayY + Math.floor(idx / trayCols) * trayGapY, rotation: snap.pieces?.[p.id]?.rotation ?? ((idx % 4) * 90), placed: snap.pieces?.[p.id]?.placed ?? false }] as const))); 
+  useEffect(() => { const t = setInterval(() => setSeconds((sec: number) => sec + 1), 1000); return () => clearInterval(t); }, []);
   const placedCount = Object.values(pieceStates).filter(p => p.placed).length; const progress = pieces.length ? placedCount / pieces.length * 100 : 0;
   function normalize(r: number) { return ((r % 360) + 360) % 360; }
+  function rotDistance(r: number) { const n = normalize(r); return Math.min(n, 360 - n); }
   function updatePiece(id: string, patch: Partial<PieceState>) { setPieceStates(s => ({ ...s, [id]: { ...s[id], ...patch } })); }
+  function select(id: string) { setSelected(id); }
   function onPointerDown(e: React.PointerEvent, id: string) { const st = pieceStates[id]; setSelected(id); drag.current = { id, dx: e.clientX - st.x, dy: e.clientY - st.y }; (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId); }
   function onPointerMove(e: React.PointerEvent) { if (!drag.current) return; const id = drag.current.id; updatePiece(id, { x: e.clientX - drag.current.dx, y: e.clientY - drag.current.dy, placed: false }); }
-  function onPointerUp() { if (!drag.current) return; const id = drag.current.id; const pc = pieces.find((p: Piece) => p.id === id); const st = pieceStates[id]; const rotOk = normalize(st.rotation) <= 12 || normalize(st.rotation) >= 348; const near = pc && Math.abs(st.x - pc.targetX) < 35 && Math.abs(st.y - pc.targetY) < 35; if (pc && near && rotOk) updatePiece(id, { x: pc.targetX, y: pc.targetY, rotation: 0, placed: true }); drag.current = null; }
-  function rotateSelected(deltaY: number) { if (!selected) return; updatePiece(selected, { rotation: (pieceStates[selected].rotation ?? 0) + (deltaY < 0 ? -15 : 15), placed: false }); }
-  async function save(auto = false) { try { setSaved(auto ? 'Autosave…' : 'Speichern…'); await api(`/puzzles/${project.id}/progress`, { method: 'PUT', body: JSON.stringify({ snapshot: { pieces: pieceStates, zoom: zoom / 100, timerSeconds: seconds, selectedPieceId: selected }, progressPercent: progress }) }); setSaved(auto ? 'Autosave gespeichert' : 'Gespeichert'); await refresh(); } catch (e: any) { setError(e.message); } }
+  function trySnap(id: string) { const pc = pieces.find((p: Piece) => p.id === id); const st = pieceStates[id]; if (!pc || !st) return false; const dx = st.x - pc.targetX, dy = st.y - pc.targetY; const dist = Math.hypot(dx, dy); const rotOk = rotDistance(st.rotation) <= Math.max(10, tolerance * 0.35); if (dist <= tolerance && rotOk) { updatePiece(id, { x: pc.targetX, y: pc.targetY, rotation: 0, placed: true }); setSaved('Teil eingerastet ✓'); return true; } return false; }
+  function onPointerUp() { if (!drag.current) return; trySnap(drag.current.id); drag.current = null; }
+  function rotateSelected(deltaY: number) { if (!selected) return; const nextRot = (pieceStates[selected].rotation ?? 0) + (deltaY < 0 ? -15 : 15); updatePiece(selected, { rotation: nextRot, placed: false }); setTimeout(() => trySnap(selected), 0); }
+  function shuffleTray() { setPieceStates(s => Object.fromEntries(pieces.map((p: Piece, idx: number) => [p.id, { ...s[p.id], x: trayX + (idx % trayCols) * trayGapX, y: trayY + Math.floor(idx / trayCols) * trayGapY, placed: false }] as const))); }
+  async function save(auto = false) { try { setSaved(auto ? 'Autosave…' : 'Speichern…'); await api(`/puzzles/${project.id}/progress`, { method: 'PUT', body: JSON.stringify({ snapshot: { pieces: pieceStates, zoom: zoom / 100, timerSeconds: seconds, selectedPieceId: selected, tolerance }, progressPercent: progress }) }); setSaved(auto ? 'Autosave gespeichert' : 'Gespeichert'); await refresh(); } catch (e: any) { setError(e.message); } }
   useEffect(() => { const t = setInterval(() => save(true), 20000); return () => clearInterval(t); });
   const mm = String(Math.floor(seconds / 60)).padStart(2, '0'), ss = String(seconds % 60).padStart(2, '0');
-  return <div className="play"><button className="link" onClick={() => nav('dashboard')}>← Zurück zum Dashboard</button><header className="top"><div><h1>{project.title}</h1><p>{pieces.length} Teile · {project.visibility === 'public' ? 'Für alle Nutzer' : 'Privat'} · Scrollrad: hoch = links drehen, runter = rechts drehen</p></div><b className="timer">00:{mm}:{ss}</b><button onClick={() => save(false)}>Save</button><span>{saved}</span></header><div className="workspace" onWheel={e => { e.preventDefault(); rotateSelected(e.deltaY); }}><div className="target" style={{ backgroundImage: `url(http://localhost:8000${project.generated?.previewUrl})`, transform: `scale(${zoom / 100})` }} />{pieces.map((pc: Piece) => { const st = pieceStates[pc.id]; return <img key={pc.id} src={'http://localhost:8000' + pc.url} className={(selected === pc.id ? 'dragpiece selected' : 'dragpiece') + (st?.placed ? ' placed' : '')} style={{ left: st?.x ?? pc.currentX, top: st?.y ?? pc.currentY, width: pieceW, height: pieceH, transform: `rotate(${st?.rotation ?? 0}deg) scale(${zoom / 100})` }} onPointerDown={e => onPointerDown(e, pc.id)} onPointerMove={onPointerMove} onPointerUp={onPointerUp} onDoubleClick={() => updatePiece(pc.id, { rotation: 0 })} title="Anklicken/ziehen; Scrollrad rotiert das ausgewählte Teil" />; })}</div><div className="bottom"><button onClick={() => alert('Hint: Ziehe ein Teil nahe an seine Position. Wenn es richtig liegt und nicht verdreht ist, rastet es ein.')}>Hint</button><div className="strip">{pieces.slice(0, 16).map((pc: Piece) => <img key={pc.id} src={'http://localhost:8000' + pc.url} className={selected === pc.id ? 'mini active' : 'mini'} onClick={() => setSelected(pc.id)} />)}</div><button onClick={() => setZoom(z => Math.max(50, z - 10))}><ZoomOut /></button><b>{zoom}%</b><button onClick={() => setZoom(z => Math.min(180, z + 10))}><ZoomIn /></button><button onClick={() => setZoom(100)}>Reset</button></div></div>;
+  return <div className="play"><button className="link" onClick={() => nav('dashboard')}>← Zurück zum Dashboard</button><header className="top"><div><h1>{project.title}</h1><p>{pieces.length} Teile · {project.visibility === 'public' ? 'Für alle Nutzer' : 'Privat'} · Anklicken/ziehen, Scrollrad dreht das ausgewählte Teil</p></div><b className="timer">00:{mm}:{ss}</b><button onClick={() => save(false)}>Save</button><span className="save-state">{saved}</span></header><div className="playtools"><span>{placedCount}/{pieces.length} eingerastet</span><label>Akzeptanzbereich <input type="range" min="18" max="80" value={tolerance} onChange={e => setTolerance(Number(e.target.value))} /> {tolerance}px</label><button onClick={shuffleTray}>Teile neu ordnen</button></div><div className="workspace" onWheel={e => { e.preventDefault(); rotateSelected(e.deltaY); }}><div className="target" style={{ backgroundImage: `url(${previewUrl})`, transform: `scale(${zoom / 100})` }} /><div className="tray"><b>Teileablage</b><small>Klicke ein Teil im Fach an, ziehe es aufs Bild und rotiere mit dem Scrollrad.</small></div>{pieces.map((pc: Piece) => { const st = pieceStates[pc.id]; return <PieceSvg key={pc.id} pc={pc} st={st} pieceW={pieceW} pieceH={pieceH} knob={knob} rows={cfg.rows} columns={cfg.columns} previewUrl={previewUrl} selected={selected === pc.id} onPointerDown={(e: React.PointerEvent) => onPointerDown(e, pc.id)} onPointerMove={onPointerMove} onPointerUp={onPointerUp} onDoubleClick={() => { updatePiece(pc.id, { rotation: 0 }); setTimeout(() => trySnap(pc.id), 0); }} />; })}</div><div className="bottom"><button onClick={() => alert('Hint: Wenn ein Teil nah genug am Ziel ist und fast richtig gedreht wurde, richtet es sich automatisch aus und rastet grün ein.')}>Hint</button><div className="strip">{pieces.slice(0, 20).map((pc: Piece) => <button key={pc.id} className={selected === pc.id ? 'mini active' : 'mini'} onClick={() => select(pc.id)}>{pc.row + 1}/{pc.column + 1}</button>)}</div><button onClick={() => setZoom(z => Math.max(45, z - 10))}><ZoomOut /></button><b>{zoom}%</b><button onClick={() => setZoom(z => Math.min(130, z + 10))}><ZoomIn /></button><button onClick={() => setZoom(78)}>Fit</button></div></div>;
 }
 
 function Account({ user, setUser, logout, setError }: any) { const [tab, setTab] = useState('profile'), [name, setName] = useState(user.displayName), [lang, setLang] = useState(user.language), [tz, setTz] = useState(user.timezone), [cur, setCur] = useState(''), [pw, setPw] = useState(''), [pw2, setPw2] = useState(''); async function saveProfile() { try { const d = await api('/users/me', { method: 'PATCH', body: JSON.stringify({ displayName: name, language: lang, timezone: tz }) }); setUser(d.user); } catch (e: any) { setError(e.message); } } async function savePw() { if (pw !== pw2) return setError('Passwörter stimmen nicht überein'); await api('/users/me/password', { method: 'PATCH', body: JSON.stringify({ currentPassword: cur, newPassword: pw }) }); alert('Passwort aktualisiert'); } async function del() { if (confirm('Konto wirklich endgültig löschen?')) { await api('/users/me', { method: 'DELETE' }); logout(); } } return <><header className="top"><h1>Accountverwaltung</h1></header><div className="tabs">{['profile', 'security', 'settings'].map(t => <button key={t} className={tab === t ? 'active' : ''} onClick={() => setTab(t)}>{t === 'profile' ? 'Profil' : t === 'security' ? 'Sicherheit' : 'Einstellungen'}</button>)}</div>{tab === 'profile' && <div className="form"><div className="avatar big">{name[0]?.toUpperCase()}</div><button onClick={() => alert('Profilbild-Upload ist als Button verdrahtet.')}>Profilbild ändern</button><label>Name<input value={name} onChange={e => setName(e.target.value)} /></label><label>E-Mail<input disabled value={user.email} /></label><label>Sprache<input value={lang} onChange={e => setLang(e.target.value)} /></label><label>Zeitzone<input value={tz} onChange={e => setTz(e.target.value)} /></label><button className="primary" onClick={saveProfile}>Änderungen speichern</button></div>}{tab === 'security' && <div className="form"><label>Aktuelles Passwort<input type="password" value={cur} onChange={e => setCur(e.target.value)} /></label><label>Neues Passwort<input type="password" value={pw} onChange={e => setPw(e.target.value)} /></label><label>Passwort bestätigen<input type="password" value={pw2} onChange={e => setPw2(e.target.value)} /></label><button className="primary" onClick={savePw}>Passwort aktualisieren</button></div>}{tab === 'settings' && <div className="danger"><h2>Danger Zone</h2><p>Konto löschen entfernt Nutzer, Sessions, Bilder, Puzzle-Projekte und Fortschritte.</p><button onClick={del}>Konto löschen</button></div>}</>; }
