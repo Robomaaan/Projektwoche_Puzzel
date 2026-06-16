@@ -1,0 +1,17 @@
+import { Router } from 'express';
+import { z } from 'zod';
+import argon2 from 'argon2';
+import { prisma } from '../db/prisma.js';
+import { config } from '../config.js';
+import { createSession, invalidateSession, login, register, safeUser } from '../services/authService.js';
+import { requireAuth } from '../middleware/auth.js';
+const router = Router();
+const authSchema = z.object({ email:z.string().email(), password:z.string().min(8), displayName:z.string().min(2).optional() });
+router.post('/register', async (req,res,next)=>{ try{ const data=authSchema.parse(req.body); const user=await register(data.email,data.password,data.displayName ?? data.email.split('@')[0]); await createSession(user.id,res); res.status(201).json({ user:safeUser(user) }); }catch(e){next(e);} });
+router.post('/login', async (req,res,next)=>{ try{ const data=z.object({email:z.string().email(),password:z.string().min(1)}).parse(req.body); const user=await login(data.email,data.password); await createSession(user.id,res); res.json({ user:safeUser(user) }); }catch(e){next(e);} });
+router.get('/me', requireAuth, (req,res)=>res.json({ user:req.user }));
+router.post('/logout', async (req,res,next)=>{ try{ await invalidateSession(req.cookies?.[config.cookieName]); res.clearCookie(config.cookieName,{path:'/'}); res.json({ ok:true }); }catch(e){next(e);} });
+router.patch('/users/me', requireAuth, async (req,res,next)=>{ try{ const data=z.object({ displayName:z.string().min(2).optional(), language:z.string().optional(), timezone:z.string().optional() }).parse(req.body); const user=await prisma.userAccount.update({ where:{id:req.user!.id}, data }); res.json({ user:safeUser(user) }); }catch(e){next(e);} });
+router.patch('/users/me/password', requireAuth, async (req,res,next)=>{ try{ const data=z.object({ currentPassword:z.string(), newPassword:z.string().min(8) }).parse(req.body); const user=await prisma.userAccount.findUniqueOrThrow({ where:{id:req.user!.id} }); if(!(await argon2.verify(user.passwordHash,data.currentPassword))) throw Object.assign(new Error('Aktuelles Passwort ist falsch'),{status:400}); await prisma.userAccount.update({ where:{id:user.id}, data:{ passwordHash: await argon2.hash(data.newPassword,{type:argon2.argon2id}) } }); res.json({ ok:true }); }catch(e){next(e);} });
+router.delete('/users/me', requireAuth, async (req,res,next)=>{ try{ await prisma.userAccount.delete({ where:{id:req.user!.id} }); res.clearCookie(config.cookieName,{path:'/'}); res.json({ ok:true }); }catch(e){next(e);} });
+export default router;

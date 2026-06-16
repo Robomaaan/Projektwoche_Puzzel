@@ -1,0 +1,130 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+enum ProcessingStatus {
+  uploaded
+  validated
+  configured
+  processing
+  generated
+  failed
+  deleted
+}
+
+model UserAccount {
+  id           String      @id @default(uuid())
+  email        String      @unique
+  passwordHash String      @map("password_hash")
+  displayName  String      @map("display_name")
+  language     String      @default("de")
+  timezone     String      @default("Europe/Berlin")
+  createdAt    DateTime    @default(now()) @map("created_at")
+  updatedAt    DateTime    @updatedAt @map("updated_at")
+  lastLoginAt  DateTime?   @map("last_login_at")
+  sessions     AuthSession[]
+  images       ImageUpload[]
+  projects     PuzzleProject[]
+  states       SavedPuzzleState[]
+  @@map("user_accounts")
+}
+
+model AuthSession {
+  id               String      @id @default(uuid())
+  userId           String      @map("user_id")
+  sessionTokenHash String      @unique @map("session_token_hash")
+  expiresAt        DateTime    @map("expires_at")
+  createdAt        DateTime    @default(now()) @map("created_at")
+  invalidatedAt    DateTime?   @map("invalidated_at")
+  user             UserAccount @relation(fields: [userId], references: [id], onDelete: Cascade)
+  @@map("auth_sessions")
+}
+
+model ImageUpload {
+  id               String           @id @default(uuid())
+  ownerId          String           @map("owner_id")
+  originalFileName String           @map("original_file_name")
+  storedFileName   String           @map("stored_file_name")
+  mimeType         String           @map("mime_type")
+  sizeBytes        Int              @map("size_bytes")
+  width            Int
+  height           Int
+  storagePath      String           @map("storage_path")
+  status           ProcessingStatus @default(uploaded)
+  createdAt        DateTime         @default(now()) @map("created_at")
+  owner            UserAccount      @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  projects         PuzzleProject[]
+  @@map("image_uploads")
+}
+
+model PuzzleProject {
+  id           String           @id @default(uuid())
+  ownerId      String           @map("owner_id")
+  imageId      String           @map("image_id")
+  title        String
+  status       ProcessingStatus @default(configured)
+  createdAt    DateTime         @default(now()) @map("created_at")
+  updatedAt    DateTime         @updatedAt @map("updated_at")
+  lastOpenedAt DateTime?        @map("last_opened_at")
+  owner        UserAccount      @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  image        ImageUpload      @relation(fields: [imageId], references: [id], onDelete: Cascade)
+  configuration PuzzleConfiguration?
+  generated    GeneratedPuzzle?
+  savedState   SavedPuzzleState?
+  @@map("puzzle_projects")
+}
+
+model PuzzleConfiguration {
+  id           String        @id @default(uuid())
+  projectId    String        @unique @map("project_id")
+  rows         Int
+  columns      Int
+  difficulty   String
+  pieceShape   String        @map("piece_shape")
+  outputFormat String        @default("web") @map("output_format")
+  project      PuzzleProject @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  @@map("puzzle_configurations")
+}
+
+model GeneratedPuzzle {
+  id          String           @id @default(uuid())
+  projectId   String           @unique @map("project_id")
+  previewPath String           @map("preview_path")
+  generatedAt DateTime         @default(now()) @map("generated_at")
+  status      ProcessingStatus @default(generated)
+  project     PuzzleProject    @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  pieces      PuzzlePiece[]
+  @@map("generated_puzzles")
+}
+
+model PuzzlePiece {
+  id        String          @id @default(uuid())
+  puzzleId  String          @map("puzzle_id")
+  row       Int
+  column    Int
+  targetX   Float           @map("target_x")
+  targetY   Float           @map("target_y")
+  currentX  Float           @map("current_x")
+  currentY  Float           @map("current_y")
+  imagePath String          @map("image_path")
+  isPlaced  Boolean         @default(false) @map("is_placed")
+  puzzle    GeneratedPuzzle @relation(fields: [puzzleId], references: [id], onDelete: Cascade)
+  @@map("puzzle_pieces")
+}
+
+model SavedPuzzleState {
+  id              String        @id @default(uuid())
+  projectId       String        @unique @map("project_id")
+  ownerId         String        @map("owner_id")
+  snapshotJson    String        @map("snapshot_json")
+  progressPercent Float         @default(0) @map("progress_percent")
+  updatedAt       DateTime      @updatedAt @map("updated_at")
+  project         PuzzleProject @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  owner           UserAccount   @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  @@map("saved_puzzle_states")
+}

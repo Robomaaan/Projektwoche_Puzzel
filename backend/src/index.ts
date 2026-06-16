@@ -1,12 +1,6 @@
-import express from 'express';
+import { createApp, prepare } from './app.js';
+import { config } from './config.js';
 
-const app = express();
-const port = Number(process.env.PORT ?? 8000);
-
-app.get('/health', (_req, res) => {
-  res.json({ ok: true });
-});
-
-app.listen(port, '0.0.0.0', () => {
-  console.log(`backend listening on ${port}`);
-});
+await prepare();
+const app=createApp();
+app.listen(config.port,'0.0.0.0',()=>console.log(`PuzzleStudio backend listening on ${config.port}`));

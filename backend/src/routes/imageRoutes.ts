@@ -1,0 +1,12 @@
+import { Router } from 'express';
+import multer from 'multer';
+import { prisma } from '../db/prisma.js';
+import { requireAuth } from '../middleware/auth.js';
+import { saveValidatedImage, publicFilePath } from '../services/storageService.js';
+const router=Router(); const upload=multer({storage:multer.memoryStorage()});
+router.use(requireAuth);
+router.post('/upload', upload.single('image'), async (req,res,next)=>{ try{ const saved=await saveValidatedImage(req.file!); const image=await prisma.imageUpload.create({ data:{ ownerId:req.user!.id, originalFileName:req.file!.originalname, storedFileName:saved.storedFileName, mimeType:req.file!.mimetype, sizeBytes:req.file!.size, width:saved.width, height:saved.height, storagePath:saved.storagePath, status:'validated' } }); res.status(201).json({ image:{...image, url:publicFilePath(image.storagePath)} }); }catch(e){next(e);} });
+router.get('/', async (req,res,next)=>{ try{ const images=await prisma.imageUpload.findMany({ where:{ownerId:req.user!.id}, orderBy:{createdAt:'desc'} }); res.json({ images: images.map(i=>({...i,url:publicFilePath(i.storagePath)})) }); }catch(e){next(e);} });
+router.get('/:id', async (req,res,next)=>{ try{ const image=await prisma.imageUpload.findFirst({ where:{id:req.params.id, ownerId:req.user!.id} }); if(!image) throw Object.assign(new Error('Bild nicht gefunden'),{status:404}); res.json({ image:{...image,url:publicFilePath(image.storagePath)} }); }catch(e){next(e);} });
+router.delete('/:id', async (req,res,next)=>{ try{ const image=await prisma.imageUpload.findFirst({ where:{id:req.params.id, ownerId:req.user!.id} }); if(!image) throw Object.assign(new Error('Bild nicht gefunden'),{status:404}); await prisma.imageUpload.delete({ where:{id:image.id} }); res.json({ ok:true }); }catch(e){next(e);} });
+export default router;

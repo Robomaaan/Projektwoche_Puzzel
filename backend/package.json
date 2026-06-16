@@ -1,23 +1,36 @@
 {
-  "name": "puzzel-backend",
+  "name": "puzzlestudio-backend",
   "private": true,
-  "version": "0.1.0",
+  "version": "1.0.0",
   "type": "module",
   "scripts": {
-    "dev": "tsx watch src/index.ts",
-    "build": "tsc -p tsconfig.json",
-    "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test": "node --test dist/**/*.test.js"
+    "dev": "DATABASE_URL=file:../data/puzzlestudio.sqlite tsx watch src/index.ts",
+    "build": "DATABASE_URL=file:../data/puzzlestudio.sqlite prisma generate && tsc -p tsconfig.json",
+    "typecheck": "DATABASE_URL=file:../data/puzzlestudio.sqlite prisma generate && tsc -p tsconfig.json --noEmit",
+    "test": "prisma generate && tsc -p tsconfig.json && DATABASE_URL=file:../data/test.sqlite prisma db push --force-reset --skip-generate && DATABASE_URL=file:../data/test.sqlite node --test dist/**/*.test.js",
+    "lint": "tsc -p tsconfig.json --noEmit",
+    "db:push": "DATABASE_URL=file:../data/puzzlestudio.sqlite prisma generate && DATABASE_URL=file:../data/puzzlestudio.sqlite prisma db push"
   },
   "dependencies": {
-    "express": "^4.21.2",
-    "sharp": "^0.34.3",
-    "zod": "^3.24.1"
+    "@prisma/client": "^6.18.0",
+    "argon2": "^0.43.1",
+    "cookie-parser": "^1.4.7",
+    "cors": "^2.8.5",
+    "express": "^5.1.0",
+    "multer": "^2.0.2",
+    "sharp": "^0.34.4",
+    "zod": "^3.25.76"
   },
   "devDependencies": {
-    "@types/express": "^5.0.3",
-    "@types/node": "^24.2.0",
-    "tsx": "^4.20.3",
-    "typescript": "^5.8.3"
+    "@types/cookie-parser": "^1.4.9",
+    "@types/cors": "^2.8.19",
+    "@types/express": "^5.0.6",
+    "@types/multer": "^2.0.0",
+    "@types/node": "^24.9.1",
+    "@types/supertest": "^6.0.3",
+    "prisma": "^6.18.0",
+    "supertest": "^7.1.4",
+    "tsx": "^4.20.6",
+    "typescript": "^5.9.3"
   }
 }
