@@ -119,3 +119,24 @@ Erneut ausgeführt:
 - `npm run test` PASS, Backend 4/4, Frontend 1/1
 - `npm run build` PASS
 - Browser-Visual-Smoke: SVG-Jigsaw-Teile sichtbar, Ablage sichtbar, keine JS-Errors.
+
+
+## Nacharbeit Vollbildmodus / 90° Rotation / rechte Ablage - 2026-06-15
+
+Zusätzliche Nutzeranforderungen umgesetzt:
+
+- Puzzlemodus ist jetzt als Vollbild-Spielmodus umgesetzt (`position: fixed`, volle Viewport-Fläche).
+- Browser-Fullscreen wird beim Öffnen nach Möglichkeit angefragt.
+- Verlassen per `ESC` oder X-Button oben rechts.
+- Scrollrad rotiert ausgewählte Puzzleteile jetzt ausschließlich in 90°-Rasterschritten.
+- Der Puzzle-Workspace selbst scrollt nicht mehr vertikal; dadurch kollidiert Scrollrad-Rotation nicht mit Board-Scrolling.
+- Teileablage liegt wieder rechts neben dem Bild, aber als eigener rechter Ablagebereich.
+- Ablage kann intern scrollen, falls viele Teile vorhanden sind; das Board bleibt ruhig.
+
+Erneut ausgeführt:
+
+- `npm run typecheck` PASS
+- `npm run lint` PASS
+- `npm run test` PASS, Backend 4/4, Frontend 1/1
+- `npm run build` PASS
+- Browser-Smoke: Vollbildklasse aktiv, X-Button vorhanden, rechte Ablage vorhanden, Workspace overflow hidden, ESC führt zurück zum Dashboard.

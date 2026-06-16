@@ -14,3 +14,8 @@
 - Der Akzeptanzbereich bleibt als UI-Slider einstellbar, weil die gewünschte Toleranz noch feinjustiert werden soll.
 - Eingerastete Teile werden grün markiert; Snap erfolgt nur bei Nähe zur Zielposition und Rotation nahe 0°.
 - Die Teileablage liegt unter dem Board statt rechts daneben, damit große Puzzleteile nicht in einer schmalen Spalte unbedienbar stapeln.
+
+- Im Puzzlemodus wird Scrollen des Boards vermieden, weil das Scrollrad für 90°-Rotation reserviert ist.
+- Teileablage liegt rechts neben dem Board als separater Tray; nur dieser Tray darf bei vielen Teilen intern scrollen.
+- Rotation erfolgt ausschließlich in 90°-Schritten, um die Bedienung puzzletypisch und vorhersagbar zu halten.
+- Puzzlemodus ist als Vollbild-Overlay umgesetzt; ESC oder X führen zurück zum Dashboard.
