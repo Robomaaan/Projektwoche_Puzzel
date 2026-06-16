@@ -8,9 +8,14 @@ type Piece = { id: string; row: number; column: number; targetX: number; targetY
 type Project = { id: string; ownerId: string; title: string; status: string; visibility: 'private' | 'public'; updatedAt: string; image?: ImageT; configuration?: { rows: number; columns: number; difficulty: string }; generated?: { previewUrl: string; pieces: Piece[] }; savedState?: { progressPercent: number; snapshotJson: string } };
 type PieceState = { x: number; y: number; rotation: number; placed: boolean };
 
-const API = 'http://localhost:8000/api';
+const API = import.meta.env.VITE_API_URL || (location.hostname === 'localhost' || location.hostname === '127.0.0.1' ? 'http://localhost:8000/api' : '/api');
 async function api(path: string, options: RequestInit = {}) {
-  const res = await fetch(API + path, { credentials: 'include', headers: options.body instanceof FormData ? {} : { 'Content-Type': 'application/json' }, ...options });
+  let res: Response;
+  try {
+    res = await fetch(API + path, { credentials: 'include', headers: options.body instanceof FormData ? {} : { 'Content-Type': 'application/json' }, ...options });
+  } catch {
+    throw new Error('Backend nicht erreichbar. Bitte API-URL/VITE_API_URL prüfen.');
+  }
   const data = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(data.error?.message || 'API Fehler');
   return data;
