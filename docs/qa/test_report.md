@@ -163,3 +163,22 @@ Erneut ausgeführt:
 - `npm run test` PASS, Backend 4/4, Frontend 1/1
 - `npm run build` PASS
 - Browser-Smoke: Darkmode Toggle schaltet auf `body[data-theme=dark]`, Teilehaufen sichtbar, Preview-Ausblendung setzt `target hidden-preview`.
+
+
+## Nacharbeit Toggle-Position / Haufen-Mischen / 3-zu-1-Flächenverhältnis - 2026-06-15
+
+Zusätzliche Nutzeranforderungen umgesetzt:
+
+- Dark/Light-Schieberegler sitzt jetzt knapp über dem Profil (`margin-bottom: 3mm`).
+- `Teilehaufen neu mischen` lässt bereits korrekt platzierte/eingerastete Teile unverändert auf dem Puzzle liegen.
+- Nur nicht platzierte Teile werden zurück in den Haufen gelegt und neu rotiert.
+- Puzzlebereich/Teilebereich auf ca. 3/4 zu 1/4 angepasst: rechter Haufenbereich nutzt `25%`, Puzzlebereich bekommt den übrigen Hauptbereich.
+- Fit-Zoom auf 88% angepasst, damit das Puzzle den linken Bereich stärker nutzt.
+
+Erneut ausgeführt:
+
+- `npm run typecheck` PASS
+- `npm run lint` PASS
+- `npm run test` PASS, Backend 4/4, Frontend 1/1
+- `npm run build` PASS
+- Browser-Smoke: rechter Tray ~25% Breite, Puzzlebereich links ~75%, Haufen-Button vorhanden, Toggle-Margin ~3mm.

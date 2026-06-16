@@ -23,3 +23,7 @@
 - Die rechte Puzzleablage ist bewusst ein überlappender Teilehaufen, damit sie sich wie ein echtes Puzzle anfühlt und weniger Raster-/Listencharakter hat.
 - Das Referenzbild im Puzzleboard kann ausgeblendet werden, um den Schwierigkeitsgrad direkt im Spiel zu erhöhen.
 - Darkmode wird clientseitig per `body[data-theme]` und `localStorage` umgesetzt; die Position des Toggles ist links unten oberhalb des Nutzerprofils.
+
+- Der Button `Teilehaufen neu mischen` darf eingerastete Teile nicht mehr zurück in den Haufen legen; platzierte Teile gelten als stabiler Fortschritt.
+- Das Vollbild-Puzzlelayout priorisiert das Board mit ca. 75% Breite und begrenzt den Teilehaufen auf ca. 25%.
+- Der Theme-Toggle sitzt optisch knapp oberhalb des Profils, mit ca. 3mm Abstand.
