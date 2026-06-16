@@ -17,6 +17,7 @@ async function api(path: string, options: RequestInit = {}) {
     throw new Error('Backend nicht erreichbar. Bitte API-URL/VITE_API_URL prüfen.');
   }
   const data = await res.json().catch(() => ({}));
+  if (!res.ok && API === '/api' && res.status === 404) throw new Error('Backend auf Vercel nicht verbunden. Bitte VITE_API_URL auf eine öffentliche Backend-URL setzen.');
   if (!res.ok) throw new Error(data.error?.message || 'API Fehler');
   return data;
 }
