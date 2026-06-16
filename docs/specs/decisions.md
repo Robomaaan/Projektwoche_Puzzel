@@ -30,3 +30,7 @@
 
 - Die Teilehaufenpositionen werden aus der aktuellen Workspace-/Tray-Geometrie berechnet; alte gespeicherte unplatzierte Teile außerhalb des Trays werden beim Öffnen zurück in den Haufen normalisiert.
 - Zoom verändert nicht nur das Referenzbild, sondern auch die visuelle Größe der Puzzleteile und die Snap-Zielpositionen.
+
+- Snap-Autosave wird direkt beim Einrasten eines Teils ausgelöst, aber nicht awaited, damit Spielinteraktion nicht blockiert wird.
+- Platzierte Teile behalten eine grüne Rückmeldung, aber mit schmalerer Umrandung, um das Bild weniger zu verdecken.
+- Auth-Validierungsfehler werden als 400 mit sichtbaren Issues behandelt, nicht als generischer 500.

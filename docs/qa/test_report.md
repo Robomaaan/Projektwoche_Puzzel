@@ -201,3 +201,24 @@ Erneut ausgeführt:
 - `npm run test` PASS, Backend 4/4, Frontend 1/1
 - `npm run build` PASS
 - Browser-Smoke: 16/16 neue Teile im rechten Traybereich; Zoom von 100% auf 110% vergrößert ein Teil von 297px auf 326.7px.
+
+
+## Nacharbeit Registrierung / Snap-Autosave / dünnere Platzierungsumrandung - 2026-06-16
+
+Zusätzliche Nutzeranforderungen umgesetzt:
+
+- Registrierungsvalidierung liefert jetzt klare `400 Ungültige Eingaben` statt potenziell `500 Interner Serverfehler`, wenn Eingaben ungültig sind.
+- Backend-Test für ungültige Registrierung ergänzt.
+- Login-Verifikation bereinigt, damit Passwortprüfung nicht doppelt/unnötig erfolgt.
+- Nach jedem korrekt eingerasteten Puzzleteil wird der neue Fortschritt sofort im Hintergrund gespeichert.
+- Dieser Snap-Autosave wird per `void persistProgress(...)` ausgelöst und nicht awaited; Drag/Spielinteraktion wird dadurch nicht blockiert.
+- Save-Status zeigt kurz `Teil eingerastet ✓ Speichere automatisch…` und danach `Automatisch gespeichert`.
+- Grüne Umrandung korrekt platzierter Teile um ca. 1/3 reduziert (`stroke-width` von 5 auf 3.3; Fallback-Outline von 3px auf 2px).
+
+Erneut ausgeführt:
+
+- `npm run typecheck` PASS
+- `npm run lint` PASS
+- `npm run test` PASS, Backend 5/5, Frontend 1/1
+- `npm run build` PASS
+- Browser-Smoke: Registrierung per UI erfolgreich; eingeloggter Nutzer sichtbar.
