@@ -1,0 +1,15 @@
+node_modules/
+dist/
+.env
+.env.*
+*.sqlite
+*.sqlite-journal
+*.sqlite-wal
+*.sqlite-shm
+backend/storage/uploads/*
+backend/storage/generated/*
+backend/storage/previews/*
+!backend/storage/uploads/.gitkeep
+!backend/storage/generated/.gitkeep
+!backend/storage/previews/.gitkeep
+.DS_Store
