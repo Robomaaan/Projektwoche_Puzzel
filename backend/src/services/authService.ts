@@ -13,7 +13,7 @@ export async function createSession(userId: string, res: Response) {
   const token = crypto.randomBytes(32).toString('hex');
   const expiresAt = new Date(Date.now() + 14 * days);
   await prisma.authSession.create({ data: { userId, sessionTokenHash: hashToken(token), expiresAt } });
-  res.cookie(config.cookieName, token, { httpOnly: true, sameSite: 'lax', secure: false, path: '/', expires: expiresAt });
+  res.cookie(config.cookieName, token, { httpOnly: true, sameSite: config.crossSiteCookies ? 'none' : 'lax', secure: config.crossSiteCookies, path: '/', expires: expiresAt });
 }
 export async function register(email: string, password: string, displayName: string) {
   const exists = await prisma.userAccount.findUnique({ where: { email: email.toLowerCase() } });

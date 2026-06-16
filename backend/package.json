@@ -8,7 +8,7 @@
     "build": "DATABASE_URL=file:../data/puzzlestudio.sqlite prisma generate && tsc -p tsconfig.json",
     "typecheck": "DATABASE_URL=file:../data/puzzlestudio.sqlite prisma generate && tsc -p tsconfig.json --noEmit",
     "test": "prisma generate && tsc -p tsconfig.json && DATABASE_URL=file:../data/test.sqlite prisma db push --force-reset --skip-generate && DATABASE_URL=file:../data/test.sqlite node --test dist/**/*.test.js",
-    "lint": "tsc -p tsconfig.json --noEmit",
+    "lint": "DATABASE_URL=file:../data/puzzlestudio.sqlite prisma generate && tsc -p tsconfig.json --noEmit",
     "db:push": "DATABASE_URL=file:../data/puzzlestudio.sqlite prisma generate && DATABASE_URL=file:../data/puzzlestudio.sqlite prisma db push --accept-data-loss"
   },
   "dependencies": {
