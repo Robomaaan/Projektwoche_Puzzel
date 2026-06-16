@@ -68,6 +68,7 @@ model PuzzleProject {
   imageId      String           @map("image_id")
   title        String
   status       ProcessingStatus @default(configured)
+  visibility   String           @default("private")
   createdAt    DateTime         @default(now()) @map("created_at")
   updatedAt    DateTime         @updatedAt @map("updated_at")
   lastOpenedAt DateTime?        @map("last_opened_at")
@@ -75,7 +76,7 @@ model PuzzleProject {
   image        ImageUpload      @relation(fields: [imageId], references: [id], onDelete: Cascade)
   configuration PuzzleConfiguration?
   generated    GeneratedPuzzle?
-  savedState   SavedPuzzleState?
+  savedStates  SavedPuzzleState[]
   @@map("puzzle_projects")
 }
 
@@ -119,12 +120,13 @@ model PuzzlePiece {
 
 model SavedPuzzleState {
   id              String        @id @default(uuid())
-  projectId       String        @unique @map("project_id")
+  projectId       String        @map("project_id")
   ownerId         String        @map("owner_id")
   snapshotJson    String        @map("snapshot_json")
   progressPercent Float         @default(0) @map("progress_percent")
   updatedAt       DateTime      @updatedAt @map("updated_at")
   project         PuzzleProject @relation(fields: [projectId], references: [id], onDelete: Cascade)
   owner           UserAccount   @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  @@unique([projectId, ownerId])
   @@map("saved_puzzle_states")
 }

@@ -53,3 +53,46 @@ Ports: Frontend 5173, Backend 8000
 ## Finaler Status
 
 Demo-ready für lokalen DAO-/Abnahme-Test. Backend und Frontend laufen weiter auf Port 8000/5173.
+
+
+## Nacharbeit Puzzlelogik / Dashboard / Auth - 2026-06-15
+
+Zusätzliche Nutzeranforderungen umgesetzt:
+
+- Login/Register-Felder sind leer; keine automatisch eingetragene Demo-Mail/Passwort mehr.
+- Dashboard-KPIs zeigen echte Daten aus DB/User-Kontext:
+  - eigene Puzzles insgesamt
+  - eigene öffentliche Puzzles
+  - eigene Entwürfe
+  - eigene hochgeladene Bilder
+- Fake-/Beispielbilder wurden aus der Bildverwaltung entfernt. Es werden nur echte Uploads angezeigt; echte Bilder sind per Klick öffnbar und löschbar.
+- Beim Puzzle-Erstellen kann der Nutzer entscheiden:
+  - `Nur für meinen Account`
+  - `Für alle Nutzer verfügbar`
+- Backend unterstützt öffentliche Puzzle-Projekte mit unabhängigen Spielständen pro Nutzer.
+- Puzzle-Spielansicht überarbeitet:
+  - echte einzelne Bildteile aus der Generierung
+  - Drag-and-drop per Pointer Events
+  - Teil anklicken/auswählen
+  - Scrollrad hoch = links herum rotieren
+  - Scrollrad runter = rechts herum rotieren
+  - Doppelklick setzt Rotation auf 0°
+  - Teile rasten ein, wenn Position nah am Ziel und Rotation korrekt ist
+  - Save/Autosave speichert Position, Rotation, Zoom, Timer und Auswahl
+
+Zusätzliche Tests:
+
+| Prüfung | Ergebnis |
+|---|---|
+| Private Puzzle bleiben für andere Nutzer unsichtbar | PASS |
+| Öffentliche Puzzle sind für andere Nutzer lesbar | PASS |
+| Öffentliche Puzzle haben pro Nutzer unabhängigen Fortschritt | PASS |
+| Browser-Smoke Register -> Canvas-Upload -> Generate Public Puzzle -> Play -> Save | PASS |
+
+Erneut ausgeführt:
+
+- `npm run db:push` PASS
+- `npm run lint` PASS
+- `npm run test` PASS, Backend 4/4, Frontend 1/1
+- `npm run build` PASS
+- Browser-Konsole ohne JS-Errors
