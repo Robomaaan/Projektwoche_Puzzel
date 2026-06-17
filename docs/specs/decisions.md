@@ -38,3 +38,5 @@
 - Für die Vercel-Live-Seite wird Bild-Upload zuerst über Vercel API Routes und Supabase Storage (`puzzle-assets`) migriert; die Service-Role bleibt ausschließlich serverseitig in `/api`-Routen.
 - Der Browser sendet für Storage-Upload/List/Delete nur den Supabase-Access-Token als Bearer-Auth und nutzt keine Service-Role-Secrets.
 - Bis zur vollständigen DB-/Prisma-Migration liegen Bildmetadaten als JSON-Sidecar im Storage-Bucket neben dem Bildobjekt. Die nächste Stufe ist eine echte Postgres/Supabase-DB-Tabelle für Assets, Puzzle-Projekte und Fortschritte.
+- Vercel-API-Helfer werden zentralisiert, damit Auth, Bucket-Konfiguration und Fehlerantworten bei der späteren Postgres-Migration nicht pro Route auseinanderlaufen.
+- Das Supabase/Postgres-Schema wird zunächst als ausführbares SQL-Konzept dokumentiert und nicht automatisch gegen die Remote-DB gepusht, solange Pooler-/Circuit-Breaker-Risiken den funktionierenden Login gefährden könnten.

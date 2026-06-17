@@ -1,17 +1,7 @@
-import { createClient } from '@supabase/supabase-js';
-
-const json = (res, status, body) => {
-  res.statusCode = status;
-  res.setHeader('Content-Type', 'application/json; charset=utf-8');
-  res.end(JSON.stringify(body));
-};
+import { createAdminClient, json } from '../_supabaseAdmin.js';
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') return json(res, 405, { error: { message: 'Methode nicht erlaubt' } });
-  const supabaseUrl = process.env.SUPABASE_URL;
-  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  if (!supabaseUrl || !serviceRoleKey) return json(res, 500, { error: { message: 'Supabase ist nicht konfiguriert' } });
-
   const body = typeof req.body === 'string' ? JSON.parse(req.body || '{}') : (req.body || {});
   const email = String(body.email || '').trim().toLowerCase();
   const password = String(body.password || '');
@@ -20,7 +10,12 @@ export default async function handler(req, res) {
     return json(res, 400, { error: { message: 'Ungültige Eingaben' } });
   }
 
-  const admin = createClient(supabaseUrl, serviceRoleKey, { auth: { persistSession: false, autoRefreshToken: false } });
+  let admin;
+  try {
+    admin = createAdminClient();
+  } catch {
+    return json(res, 500, { error: { message: 'Supabase ist nicht konfiguriert' } });
+  }
   const { data, error } = await admin.auth.admin.createUser({
     email,
     password,

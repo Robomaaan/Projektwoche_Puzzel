@@ -246,3 +246,25 @@ Erneut ausgeführt:
 Bekannte Grenze:
 
 - Puzzle-Generierung bleibt noch an der alten lokalen DB-/Backend-Logik; live ist in diesem Schritt der persistente Bild-Upload als Grundlage freigeschaltet.
+
+
+## Vercel/Supabase Postgres-Vorbereitung - 2026-06-17
+
+Zusätzliche Umsetzung:
+
+- Vercel API Routes nutzen jetzt einen gemeinsamen Supabase-Admin-Helfer für Secret-Prüfung, Auth-Token-Validierung, private Bucket-Konfiguration und JSON-/Fehlerantworten.
+- `/api/auth/register` bleibt funktional auf Supabase Auth, verwendet aber dieselbe serverseitige Admin-Initialisierung wie die Storage-Routen.
+- Neue `GET /api/health` Route meldet nur nicht-sensitive Konfigurationsflags und Runtime-Status für Vercel-API-Diagnose.
+- Supabase/Postgres-Zielschema für `image_uploads`, `puzzle_projects`, `puzzle_configurations`, `generated_puzzles`, `puzzle_pieces` und `saved_puzzle_states` in `docs/api/vercel-supabase-postgres.md` dokumentiert.
+- RLS-Policy-Skizze und Migrationspfad von Storage-Sidecars zu Postgres ergänzt.
+
+Erneut ausgeführt:
+
+- `node --check frontend/api/*.js frontend/api/auth/register.js frontend/api/images/*` PASS
+- `npm run lint` PASS
+- `npm run test` PASS, Backend 5/5, Frontend 1/1
+- `npm run build` PASS
+
+Bekannte Grenze:
+
+- Kein Remote-DB-Push in diesem Schritt: Das Postgres-Schema ist bewusst vorbereitend dokumentiert, damit ein Pooler-/Circuit-Breaker-Problem den bestehenden Supabase-Login und Storage-Upload nicht gefährdet.
