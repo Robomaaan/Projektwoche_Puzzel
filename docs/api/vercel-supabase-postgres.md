@@ -9,7 +9,7 @@ Erwartete Vercel-Variablen:
 - `VITE_SUPABASE_URL` und `VITE_SUPABASE_ANON_KEY` für den Browser-Login.
 - `SUPABASE_URL` optional serverseitig; fällt auf `VITE_SUPABASE_URL` zurück.
 - `SUPABASE_SERVICE_ROLE_KEY` nur serverseitig für Vercel API Routes.
-- `SUPABASE_ASSET_BUCKET` optional, Standard: `puzzle-assets`.
+- `SUPABASE_ASSET_BUCKET` optional; fällt auf das bereits genutzte `SUPABASE_STORAGE_BUCKET` und danach auf `puzzle-assets` zurück.
 - `UPLOAD_MAX_BYTES` optional, Standard: `10485760`.
 
 Die Route `GET /api/health` meldet nur Konfigurations-Flags und Bucket-/Limit-Namen, aber keine Secret-Werte.

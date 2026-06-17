@@ -1,6 +1,6 @@
 import { createClient } from '@supabase/supabase-js';
 
-export const ASSET_BUCKET = process.env.SUPABASE_ASSET_BUCKET || 'puzzle-assets';
+export const ASSET_BUCKET = process.env.SUPABASE_ASSET_BUCKET || process.env.SUPABASE_STORAGE_BUCKET || 'puzzle-assets';
 export const IMAGE_MIME_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
 export const SIDECAR_MIME_TYPES = ['application/json'];
 export const MAX_IMAGE_BYTES = Number(process.env.UPLOAD_MAX_BYTES || 10 * 1024 * 1024);
