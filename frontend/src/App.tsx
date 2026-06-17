@@ -16,20 +16,43 @@ const supabase = SUPABASE_URL && SUPABASE_ANON_KEY ? createClient(SUPABASE_URL, 
 function fromSupabaseUser(u: SupabaseUser): UserT { return { id: u.id, email: u.email ?? '', displayName: (u.user_metadata?.displayName || u.user_metadata?.name || u.email?.split('@')[0] || 'Nutzer') as string, language: 'de', timezone: 'Europe/Berlin' }; }
 async function currentUser() { if (supabase) { const { data } = await supabase.auth.getUser(); return data.user ? fromSupabaseUser(data.user) : null; } const d = await api('/auth/me'); return d.user as UserT; }
 async function signOutUser() { if (supabase) { await supabase.auth.signOut(); return; } await api('/auth/logout', { method: 'POST' }); }
+export function friendlyAuthError(message: string, mode: 'login' | 'register') {
+  const text = String(message || '').toLowerCase();
+  if (text.includes('invalid login credentials')) return 'E-Mail oder Passwort stimmt nicht. Bitte prüfe deine Eingaben.';
+  if (text.includes('email not confirmed')) return 'Diese E-Mail ist noch nicht bestätigt. Bitte registriere den Account erneut oder prüfe dein Postfach.';
+  if (text.includes('already') || text.includes('registered') || text.includes('exists') || text.includes('bereits registriert')) return 'Diese E-Mail ist bereits registriert. Bitte wechsle zum Login.';
+  if (text.includes('fetch') || text.includes('network') || text.includes('failed to fetch')) return 'Backend nicht erreichbar. Bitte Verbindung prüfen und erneut versuchen.';
+  if (text.includes('supabase') && text.includes('konfiguriert')) return 'Supabase ist auf dem Server noch nicht vollständig konfiguriert.';
+  if (mode === 'register' && !message) return 'Registrierung konnte nicht abgeschlossen werden.';
+  return message || 'Login konnte nicht abgeschlossen werden.';
+}
 async function signInUser(email: string, password: string, displayName?: string) {
+  const mode = displayName !== undefined ? 'register' : 'login';
   if (supabase) {
     if (displayName !== undefined) {
-      const res = await fetch('/api/auth/register', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email, password, displayName }) });
+      let res: Response;
+      try {
+        res = await fetch('/api/auth/register', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email, password, displayName }) });
+      } catch {
+        throw new Error(friendlyAuthError('failed to fetch', 'register'));
+      }
       const created = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(created.error?.message || 'Registrierung konnte nicht abgeschlossen werden.');
+      if (!res.ok) {
+        const fallback = res.status === 404 ? 'Backend auf Vercel nicht verbunden. Registrierung ist aktuell nicht möglich.' : 'Registrierung konnte nicht abgeschlossen werden.';
+        throw new Error(friendlyAuthError(created.error?.message || fallback, 'register'));
+      }
     }
     const { data, error } = await supabase.auth.signInWithPassword({ email, password });
-    if (error) throw new Error(error.message);
-    if (!data.user) throw new Error('Login konnte nicht abgeschlossen werden.');
+    if (error) throw new Error(friendlyAuthError(error.message, mode));
+    if (!data.user) throw new Error(friendlyAuthError('', mode));
     return fromSupabaseUser(data.user);
   }
-  const data = await api('/auth/' + (displayName !== undefined ? 'register' : 'login'), { method: 'POST', body: JSON.stringify(displayName !== undefined ? { email, password, displayName } : { email, password }) });
-  return data.user as UserT;
+  try {
+    const data = await api('/auth/' + (displayName !== undefined ? 'register' : 'login'), { method: 'POST', body: JSON.stringify(displayName !== undefined ? { email, password, displayName } : { email, password }) });
+    return data.user as UserT;
+  } catch (error: any) {
+    throw new Error(friendlyAuthError(error.message, mode));
+  }
 }
 async function api(path: string, options: RequestInit = {}) {
   let res: Response;
@@ -102,9 +125,25 @@ function ThemeToggle({ theme, setTheme }: { theme: 'light' | 'dark'; setTheme: (
 function Nav(p: { icon: React.ReactNode; label: string; page: string; cur: string; nav: (x: string) => void }) { return <button className={p.cur === p.page ? 'active' : ''} onClick={() => p.nav(p.page)}>{p.icon}<span>{p.label}</span></button>; }
 
 function AuthPage({ mode, setMode, onUser }: { mode: string; setMode: (m: string) => void; onUser: (u: UserT) => void }) {
-  const [email, setEmail] = useState(''), [password, setPassword] = useState(''), [displayName, setDisplayName] = useState(''), [error, setError] = useState('');
-  async function submit(e: React.FormEvent) { e.preventDefault(); setError(''); try { const user = await signInUser(email, password, mode === 'register' ? displayName : undefined); onUser(user); } catch (err: any) { setError(err.message); } }
-  return <div className="auth"><form onSubmit={submit}><h1>{mode === 'login' ? 'Einloggen' : 'Registrieren'}</h1><p>Bitte gib deine eigenen Zugangsdaten ein.</p>{error && <div className="error">{error}</div>}{mode === 'register' && <label>Name<input required value={displayName} onChange={e => setDisplayName(e.target.value)} autoComplete="name" /></label>}<label>E-Mail<input required value={email} onChange={e => setEmail(e.target.value)} type="email" autoComplete="email" /></label><label>Passwort<input required minLength={6} value={password} onChange={e => setPassword(e.target.value)} type="password" autoComplete={mode === 'login' ? 'current-password' : 'new-password'} /></label><button className="primary" type="submit">{mode === 'login' ? 'Login' : 'Account erstellen'}</button><button type="button" className="link" onClick={() => setMode(mode === 'login' ? 'register' : 'login')}>{mode === 'login' ? 'Noch kein Konto? Registrieren' : 'Schon registriert? Login'}</button></form></div>;
+  const [email, setEmail] = useState(''), [password, setPassword] = useState(''), [displayName, setDisplayName] = useState(''), [error, setError] = useState(''), [busy, setBusy] = useState(false);
+  const authMode = mode === 'register' ? 'register' : 'login';
+  function switchMode(next: 'login' | 'register') { setError(''); setMode(next); location.hash = next; }
+  async function submit(e: React.FormEvent) {
+    e.preventDefault();
+    if (busy) return;
+    setBusy(true);
+    setError('');
+    try {
+      const user = await signInUser(email.trim(), password, authMode === 'register' ? displayName.trim() : undefined);
+      onUser(user);
+      location.hash = 'dashboard';
+    } catch (err: any) {
+      setError(friendlyAuthError(err.message, authMode));
+    } finally {
+      setBusy(false);
+    }
+  }
+  return <div className="auth"><form onSubmit={submit}><h1>{authMode === 'login' ? 'Einloggen' : 'Registrieren'}</h1><p>Bitte gib deine eigenen Zugangsdaten ein.</p>{error && <div className="error" role="alert">{error}</div>}{authMode === 'register' && <label>Name<input required value={displayName} onChange={e => setDisplayName(e.target.value)} autoComplete="name" disabled={busy} /></label>}<label>E-Mail<input required value={email} onChange={e => setEmail(e.target.value)} type="email" autoComplete="email" disabled={busy} /></label><label>Passwort<input required minLength={6} value={password} onChange={e => setPassword(e.target.value)} type="password" autoComplete={authMode === 'login' ? 'current-password' : 'new-password'} disabled={busy} /></label><button className="primary" type="submit" disabled={busy}>{busy ? 'Bitte warten…' : authMode === 'login' ? 'Login' : 'Account erstellen'}</button><button type="button" className="link" disabled={busy} onClick={() => switchMode(authMode === 'login' ? 'register' : 'login')}>{authMode === 'login' ? 'Noch kein Konto? Registrieren' : 'Schon registriert? Login'}</button></form></div>;
 }
 
 function CreatePuzzlePanel({ images, refresh, nav, setActiveProject, setError }: any) {
