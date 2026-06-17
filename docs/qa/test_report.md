@@ -222,3 +222,27 @@ Erneut ausgeführt:
 - `npm run test` PASS, Backend 5/5, Frontend 1/1
 - `npm run build` PASS
 - Browser-Smoke: Registrierung per UI erfolgreich; eingeloggter Nutzer sichtbar.
+
+
+## Vercel/Supabase Storage Upload-Grundlage - 2026-06-17
+
+Zusätzliche Nutzeranforderung umgesetzt:
+
+- Live-Bild-Upload nutzt jetzt Vercel API Routes unter `/api/images/*` statt lokalen Backend-Storage.
+- Upload, Liste und Löschen authentifizieren den eingeloggten Supabase-Nutzer per Bearer-Access-Token.
+- Serverseitig wird ausschließlich `SUPABASE_SERVICE_ROLE_KEY` in Vercel API Routes verwendet; der Browser erhält kein Service-Role-Secret.
+- Bilder werden persistent im Supabase Storage Bucket `puzzle-assets` gespeichert.
+- Bildmetadaten werden übergangsweise als JSON-Sidecar im selben User-Ordner gespeichert, bis die DB-/Prisma-Migration auf Supabase Postgres folgt.
+- Signed URLs werden für die Anzeige generiert, damit der Bucket privat bleiben kann.
+
+Erneut ausgeführt:
+
+- `npm install` PASS
+- `npm run typecheck` PASS
+- `npm run lint` PASS
+- `npm run test` PASS, Backend 5/5, Frontend 1/1
+- `npm run build` PASS
+
+Bekannte Grenze:
+
+- Puzzle-Generierung bleibt noch an der alten lokalen DB-/Backend-Logik; live ist in diesem Schritt der persistente Bild-Upload als Grundlage freigeschaltet.
