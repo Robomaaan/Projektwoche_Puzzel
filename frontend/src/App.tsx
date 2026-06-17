@@ -34,14 +34,42 @@ async function signInUser(email: string, password: string, displayName?: string)
 async function api(path: string, options: RequestInit = {}) {
   let res: Response;
   try {
-    res = await fetch(API + path, { credentials: 'include', headers: options.body instanceof FormData ? {} : { 'Content-Type': 'application/json' }, ...options });
+    const headers = new Headers(options.headers || undefined);
+    if (!(options.body instanceof FormData) && !headers.has('Content-Type')) headers.set('Content-Type', 'application/json');
+    if (supabase) {
+      const { data } = await supabase.auth.getSession();
+      if (data.session?.access_token) headers.set('Authorization', `Bearer ${data.session.access_token}`);
+    }
+    res = await fetch(API + path, { credentials: 'include', ...options, headers });
   } catch {
     throw new Error('Backend nicht erreichbar. Bitte API-URL/VITE_API_URL prüfen.');
   }
   const data = await res.json().catch(() => ({}));
-  if (!res.ok && API === '/api' && res.status === 404) throw new Error('Backend auf Vercel nicht verbunden. Bitte VITE_API_URL auf eine öffentliche Backend-URL setzen.');
+  if (!res.ok && (API === '/api' || API.endsWith('/api')) && res.status === 404) throw new Error('Backend auf Vercel nicht verbunden. Bitte VITE_API_URL auf eine öffentliche Backend-URL setzen.');
   if (!res.ok) throw new Error(data.error?.message || 'API Fehler');
   return data;
+}
+function assetUrl(url?: string) {
+  if (!url) return '';
+  if (/^https?:\/\//i.test(url) || url.startsWith('data:') || url.startsWith('blob:')) return url;
+  return 'http://localhost:8000' + url;
+}
+function getImageDimensions(file: File) {
+  return new Promise<{ width: number; height: number }>((resolve) => {
+    const img = new Image();
+    const objectUrl = URL.createObjectURL(file);
+    img.onload = () => { const dims = { width: img.naturalWidth, height: img.naturalHeight }; URL.revokeObjectURL(objectUrl); resolve(dims); };
+    img.onerror = () => { URL.revokeObjectURL(objectUrl); resolve({ width: 0, height: 0 }); };
+    img.src = objectUrl;
+  });
+}
+async function uploadImageFile(file: File) {
+  const dims = await getImageDimensions(file);
+  const fd = new FormData();
+  fd.append('image', file);
+  fd.append('width', String(dims.width));
+  fd.append('height', String(dims.height));
+  return api('/images/upload', { method: 'POST', body: fd });
 }
 function parseSnapshot(project: Project) {
   try { return project.savedState?.snapshotJson ? JSON.parse(project.savedState.snapshotJson) : {}; } catch { return {}; }
@@ -60,7 +88,7 @@ export function App() {
   useEffect(() => { document.body.dataset.theme = theme; localStorage.setItem('theme', theme); }, [theme]);
   useEffect(() => { currentUser().then(setUser).catch(() => setUser(null)).finally(() => setLoading(false)); }, []);
   useEffect(() => { if (user) { if (page === 'login' || page === 'register') { setPage('dashboard'); location.hash = 'dashboard'; } void refresh(); } }, [user]);
-  async function refresh() { if (supabase && API === '/api') { setImages([]); setProjects([]); return; } const [imgs, projs] = await Promise.all([api('/images').catch(() => ({ images: [] })), api('/puzzles').catch(() => ({ projects: [] }))]); setImages(imgs.images); setProjects(projs.projects); }
+  async function refresh() { const [imgs, projs] = await Promise.all([api('/images').catch(() => ({ images: [] })), api('/puzzles').catch(() => ({ projects: [] }))]); setImages(imgs.images); setProjects(projs.projects); }
   function nav(p: string) { setPage(p); location.hash = p; setError(''); }
   async function logout() { await signOutUser(); setUser(null); setPage('login'); }
 
@@ -88,23 +116,23 @@ function CreatePuzzlePanel({ images, refresh, nav, setActiveProject, setError }:
 
 function Dashboard({ user, images, projects, refresh, nav, setActiveProject, setError }: any) {
   const fileRef = useRef<HTMLInputElement>(null); const own = projects.filter((p: Project) => p.ownerId === user.id); const published = own.filter((p: Project) => p.visibility === 'public').length; const drafts = own.filter((p: Project) => p.status !== 'generated').length;
-  async function upload(f?: File) { if (!f) return; const fd = new FormData(); fd.append('image', f); try { await api('/images/upload', { method: 'POST', body: fd }); await refresh(); } catch (e: any) { setError(e.message); } }
+  async function upload(f?: File) { if (!f) return; try { await uploadImageFile(f); await refresh(); } catch (e: any) { setError(e.message); } }
   return <><header className="top"><div><h1>Willkommen zurück, {user.displayName}!</h1><p>Hier ist dein echter Puzzle-Überblick aus der Datenbank.</p></div><button className="primary" onClick={() => images.length ? document.getElementById('creator')?.scrollIntoView({ behavior: 'smooth' }) : fileRef.current?.click()}>+ Neues Puzzle erstellen</button></header><div className="kpis">{[['Puzzles insgesamt', own.length], ['Für alle Nutzer', published], ['Entwürfe', drafts], ['Hochgeladene Bilder', images.length]].map(x => <div className="kpi" key={x[0]}><b>{x[1]}</b><span>{x[0]}</span></div>)}</div><div className="drop" onClick={() => fileRef.current?.click()} onDragOver={e => e.preventDefault()} onDrop={e => { e.preventDefault(); void upload(e.dataTransfer.files[0]); }}><Upload /><b>Bild hochladen</b><span>JPG/PNG/WEBP bis 10 MB</span><input hidden ref={fileRef} type="file" accept="image/*" onChange={e => upload(e.target.files?.[0])} /></div>{images.length > 0 && <div id="creator"><CreatePuzzlePanel images={images} refresh={refresh} nav={nav} setActiveProject={setActiveProject} setError={setError} /></div>}<h2>Deine letzten Puzzles <button className="link" onClick={() => nav('puzzles')}>Alle anzeigen</button></h2><div className="grid cards">{own.slice(0, 4).map((p: Project) => <PuzzleCard key={p.id} p={p} currentUserId={user.id} onClick={() => { setActiveProject(p); nav('play'); }} />)}</div>{own.length === 0 && <p className="empty">Noch keine eigenen Puzzles. Lade ein Bild hoch und erstelle dein erstes Puzzle.</p>}</>;
 }
 
 function Images({ images, refresh, setError }: any) {
   const [q, setQ] = useState(''), [sort, setSort] = useState('new'), [grid, setGrid] = useState(true); const ref = useRef<HTMLInputElement>(null);
   const list = useMemo(() => images.filter((i: ImageT) => i.originalFileName.toLowerCase().includes(q.toLowerCase())).sort((a: ImageT, b: ImageT) => sort === 'new' ? Date.parse(b.createdAt) - Date.parse(a.createdAt) : Date.parse(a.createdAt) - Date.parse(b.createdAt)), [images, q, sort]);
-  async function upload(f?: File) { if (!f) return; const fd = new FormData(); fd.append('image', f); try { await api('/images/upload', { method: 'POST', body: fd }); await refresh(); } catch (e: any) { setError(e.message); } }
+  async function upload(f?: File) { if (!f) return; try { await uploadImageFile(f); await refresh(); } catch (e: any) { setError(e.message); } }
   async function del(id: string) { if (confirm('Bild wirklich löschen?')) { await api('/images/' + id, { method: 'DELETE' }); await refresh(); } }
-  return <><header className="top"><h1>Bildverwaltung</h1><button className="primary" onClick={() => ref.current?.click()}>+ Bilder hochladen</button><input hidden ref={ref} type="file" accept="image/*" onChange={e => upload(e.target.files?.[0])} /></header><div className="toolbar"><input placeholder="Suche" value={q} onChange={e => setQ(e.target.value)} /><select><option>Eigene Bilder</option></select><select value={sort} onChange={e => setSort(e.target.value)}><option value="new">Neueste</option><option value="old">Älteste</option></select><button onClick={() => setGrid(!grid)}><Grid2X2 /> {grid ? 'Grid' : 'List'}</button></div><div className={grid ? 'imagegrid' : 'imagelist'}>{list.map((i: ImageT) => <div className="imagecard" key={i.id}><a href={'http://localhost:8000' + i.url} target="_blank"><img src={'http://localhost:8000' + i.url} /></a><b>{i.originalFileName}</b><small>{i.width}×{i.height} · {i.status}</small><button onClick={() => del(i.id)}>Löschen</button></div>)}</div>{!list.length && <p className="empty">Keine Beispielbilder mehr: Hier erscheinen nur echte Bilder aus deiner Datenbank.</p>}</>;
+  return <><header className="top"><h1>Bildverwaltung</h1><button className="primary" onClick={() => ref.current?.click()}>+ Bilder hochladen</button><input hidden ref={ref} type="file" accept="image/*" onChange={e => upload(e.target.files?.[0])} /></header><div className="toolbar"><input placeholder="Suche" value={q} onChange={e => setQ(e.target.value)} /><select><option>Eigene Bilder</option></select><select value={sort} onChange={e => setSort(e.target.value)}><option value="new">Neueste</option><option value="old">Älteste</option></select><button onClick={() => setGrid(!grid)}><Grid2X2 /> {grid ? 'Grid' : 'List'}</button></div><div className={grid ? 'imagegrid' : 'imagelist'}>{list.map((i: ImageT) => <div className="imagecard" key={i.id}><a href={assetUrl(i.url)} target="_blank"><img src={assetUrl(i.url)} /></a><b>{i.originalFileName}</b><small>{i.width}×{i.height} · {i.status}</small><button onClick={() => del(i.id)}>Löschen</button></div>)}</div>{!list.length && <p className="empty">Keine Beispielbilder mehr: Hier erscheinen nur echte Bilder aus deiner Datenbank.</p>}</>;
 }
 
 function Puzzles({ user, projects, images, refresh, nav, setActiveProject, setError }: any) {
   async function del(id: string) { if (confirm('Puzzle löschen?')) { await api('/puzzles/' + id, { method: 'DELETE' }); await refresh(); } }
   return <><header className="top"><h1>Puzzles</h1></header>{images.length > 0 && <CreatePuzzlePanel images={images} refresh={refresh} nav={nav} setActiveProject={setActiveProject} setError={setError} />}<div className="grid cards">{projects.map((p: Project) => <PuzzleCard key={p.id} p={p} currentUserId={user.id} onClick={() => { setActiveProject(p); nav('play'); }} onDelete={p.ownerId === user.id ? () => del(p.id) : undefined} />)}</div>{!projects.length && <p className="empty">Noch keine Puzzles. Lade ein Bild hoch und erstelle dein erstes Puzzle.</p>}</>;
 }
-function PuzzleCard({ p, onClick, onDelete, currentUserId }: any) { return <div className="pcard" onClick={onClick}>{p.generated?.previewUrl && <img src={'http://localhost:8000' + p.generated.previewUrl} />}<b>{p.title}</b><span className={p.visibility === 'public' ? 'pill green' : 'pill purple'}>{p.visibility === 'public' ? 'Für alle Nutzer' : 'Privat'}</span><small>{p.ownerId === currentUserId ? 'Eigenes Puzzle' : 'Öffentliches Puzzle'} · {Math.round(p.savedState?.progressPercent ?? 0)}% Fortschritt</small>{onDelete && <button onClick={(e) => { e.stopPropagation(); onDelete(); }}>Löschen</button>}</div>; }
+function PuzzleCard({ p, onClick, onDelete, currentUserId }: any) { return <div className="pcard" onClick={onClick}>{p.generated?.previewUrl && <img src={assetUrl(p.generated.previewUrl)} />}<b>{p.title}</b><span className={p.visibility === 'public' ? 'pill green' : 'pill purple'}>{p.visibility === 'public' ? 'Für alle Nutzer' : 'Privat'}</span><small>{p.ownerId === currentUserId ? 'Eigenes Puzzle' : 'Öffentliches Puzzle'} · {Math.round(p.savedState?.progressPercent ?? 0)}% Fortschritt</small>{onDelete && <button onClick={(e) => { e.stopPropagation(); onDelete(); }}>Löschen</button>}</div>; }
 
 
 function edgeSign(a: number, b: number) { return ((a * 37 + b * 17 + 11) % 2 === 0) ? 1 : -1; }
@@ -162,7 +190,7 @@ function Play({ project, refresh, nav, setError }: any) {
   const pieceW = 900 / cfg.columns, pieceH = 600 / cfg.rows;
   const knob = Math.min(pieceW, pieceH) * 0.24;
   const snap = parseSnapshot(project);
-  const previewUrl = `http://localhost:8000${project.generated?.previewUrl}`;
+  const previewUrl = assetUrl(project.generated?.previewUrl);
   const [zoom, setZoom] = useState(Math.round((snap.zoom ?? 0.88) * 100));
   const [seconds, setSeconds] = useState(snap.timerSeconds ?? 0);
   const [saved, setSaved] = useState('Bereit');

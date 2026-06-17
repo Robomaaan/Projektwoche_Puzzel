@@ -34,3 +34,7 @@
 - Snap-Autosave wird direkt beim Einrasten eines Teils ausgelöst, aber nicht awaited, damit Spielinteraktion nicht blockiert wird.
 - Platzierte Teile behalten eine grüne Rückmeldung, aber mit schmalerer Umrandung, um das Bild weniger zu verdecken.
 - Auth-Validierungsfehler werden als 400 mit sichtbaren Issues behandelt, nicht als generischer 500.
+
+- Für die Vercel-Live-Seite wird Bild-Upload zuerst über Vercel API Routes und Supabase Storage (`puzzle-assets`) migriert; die Service-Role bleibt ausschließlich serverseitig in `/api`-Routen.
+- Der Browser sendet für Storage-Upload/List/Delete nur den Supabase-Access-Token als Bearer-Auth und nutzt keine Service-Role-Secrets.
+- Bis zur vollständigen DB-/Prisma-Migration liegen Bildmetadaten als JSON-Sidecar im Storage-Bucket neben dem Bildobjekt. Die nächste Stufe ist eine echte Postgres/Supabase-DB-Tabelle für Assets, Puzzle-Projekte und Fortschritte.
