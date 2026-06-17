@@ -19,10 +19,9 @@ async function signOutUser() { if (supabase) { await supabase.auth.signOut(); re
 async function signInUser(email: string, password: string, displayName?: string) {
   if (supabase) {
     if (displayName !== undefined) {
-      const { data, error } = await supabase.auth.signUp({ email, password, options: { data: { displayName } } });
-      if (error) throw new Error(error.message);
-      if (!data.user) throw new Error('Registrierung konnte nicht abgeschlossen werden.');
-      return fromSupabaseUser(data.user);
+      const res = await fetch('/api/auth/register', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email, password, displayName }) });
+      const created = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(created.error?.message || 'Registrierung konnte nicht abgeschlossen werden.');
     }
     const { data, error } = await supabase.auth.signInWithPassword({ email, password });
     if (error) throw new Error(error.message);
