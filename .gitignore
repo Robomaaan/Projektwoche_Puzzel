@@ -13,3 +13,4 @@ backend/storage/previews/*
 !backend/storage/generated/.gitkeep
 !backend/storage/previews/.gitkeep
 .DS_Store
+.vercel

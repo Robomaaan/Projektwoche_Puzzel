@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { createClient, type User as SupabaseUser } from '@supabase/supabase-js';
 import { Camera, Grid2X2, LayoutDashboard, LogOut, Puzzle, Settings, Upload, ZoomIn, ZoomOut } from 'lucide-react';
 import './styles.css';
 
@@ -9,6 +10,28 @@ type Project = { id: string; ownerId: string; title: string; status: string; vis
 type PieceState = { x: number; y: number; rotation: number; placed: boolean };
 
 const API = import.meta.env.VITE_API_URL || (location.hostname === 'localhost' || location.hostname === '127.0.0.1' ? 'http://localhost:8000/api' : '/api');
+const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL || '';
+const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY || '';
+const supabase = SUPABASE_URL && SUPABASE_ANON_KEY ? createClient(SUPABASE_URL, SUPABASE_ANON_KEY, { auth: { persistSession: true, autoRefreshToken: true } }) : null;
+function fromSupabaseUser(u: SupabaseUser): UserT { return { id: u.id, email: u.email ?? '', displayName: (u.user_metadata?.displayName || u.user_metadata?.name || u.email?.split('@')[0] || 'Nutzer') as string, language: 'de', timezone: 'Europe/Berlin' }; }
+async function currentUser() { if (supabase) { const { data } = await supabase.auth.getUser(); return data.user ? fromSupabaseUser(data.user) : null; } const d = await api('/auth/me'); return d.user as UserT; }
+async function signOutUser() { if (supabase) { await supabase.auth.signOut(); return; } await api('/auth/logout', { method: 'POST' }); }
+async function signInUser(email: string, password: string, displayName?: string) {
+  if (supabase) {
+    if (displayName !== undefined) {
+      const { data, error } = await supabase.auth.signUp({ email, password, options: { data: { displayName } } });
+      if (error) throw new Error(error.message);
+      if (!data.user) throw new Error('Registrierung konnte nicht abgeschlossen werden.');
+      return fromSupabaseUser(data.user);
+    }
+    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+    if (error) throw new Error(error.message);
+    if (!data.user) throw new Error('Login konnte nicht abgeschlossen werden.');
+    return fromSupabaseUser(data.user);
+  }
+  const data = await api('/auth/' + (displayName !== undefined ? 'register' : 'login'), { method: 'POST', body: JSON.stringify(displayName !== undefined ? { email, password, displayName } : { email, password }) });
+  return data.user as UserT;
+}
 async function api(path: string, options: RequestInit = {}) {
   let res: Response;
   try {
@@ -36,11 +59,11 @@ export function App() {
   const [theme, setTheme] = useState<'light' | 'dark'>(() => (localStorage.getItem('theme') as 'light' | 'dark') || 'light');
 
   useEffect(() => { document.body.dataset.theme = theme; localStorage.setItem('theme', theme); }, [theme]);
-  useEffect(() => { api('/auth/me').then(d => setUser(d.user)).catch(() => setUser(null)).finally(() => setLoading(false)); }, []);
+  useEffect(() => { currentUser().then(setUser).catch(() => setUser(null)).finally(() => setLoading(false)); }, []);
   useEffect(() => { if (user) { if (page === 'login' || page === 'register') { setPage('dashboard'); location.hash = 'dashboard'; } void refresh(); } }, [user]);
-  async function refresh() { const [imgs, projs] = await Promise.all([api('/images').catch(() => ({ images: [] })), api('/puzzles').catch(() => ({ projects: [] }))]); setImages(imgs.images); setProjects(projs.projects); }
+  async function refresh() { if (supabase && API === '/api') { setImages([]); setProjects([]); return; } const [imgs, projs] = await Promise.all([api('/images').catch(() => ({ images: [] })), api('/puzzles').catch(() => ({ projects: [] }))]); setImages(imgs.images); setProjects(projs.projects); }
   function nav(p: string) { setPage(p); location.hash = p; setError(''); }
-  async function logout() { await api('/auth/logout', { method: 'POST' }); setUser(null); setPage('login'); }
+  async function logout() { await signOutUser(); setUser(null); setPage('login'); }
 
   if (loading) return <div className="center">Lade PuzzleStudio…</div>;
   if (!user) return <AuthPage mode={page === 'register' ? 'register' : 'login'} setMode={setPage} onUser={setUser} />;
@@ -53,8 +76,8 @@ function Nav(p: { icon: React.ReactNode; label: string; page: string; cur: strin
 
 function AuthPage({ mode, setMode, onUser }: { mode: string; setMode: (m: string) => void; onUser: (u: UserT) => void }) {
   const [email, setEmail] = useState(''), [password, setPassword] = useState(''), [displayName, setDisplayName] = useState(''), [error, setError] = useState('');
-  async function submit(e: React.FormEvent) { e.preventDefault(); setError(''); try { const data = await api('/auth/' + mode, { method: 'POST', body: JSON.stringify(mode === 'register' ? { email, password, displayName } : { email, password }) }); onUser(data.user); } catch (err: any) { setError(err.message); } }
-  return <div className="auth"><form onSubmit={submit}><h1>{mode === 'login' ? 'Einloggen' : 'Registrieren'}</h1><p>Bitte gib deine eigenen Zugangsdaten ein.</p>{error && <div className="error">{error}</div>}{mode === 'register' && <label>Name<input value={displayName} onChange={e => setDisplayName(e.target.value)} autoComplete="name" /></label>}<label>E-Mail<input value={email} onChange={e => setEmail(e.target.value)} type="email" autoComplete="email" /></label><label>Passwort<input value={password} onChange={e => setPassword(e.target.value)} type="password" autoComplete={mode === 'login' ? 'current-password' : 'new-password'} /></label><button className="primary" type="submit">{mode === 'login' ? 'Login' : 'Account erstellen'}</button><button type="button" className="link" onClick={() => setMode(mode === 'login' ? 'register' : 'login')}>{mode === 'login' ? 'Noch kein Konto? Registrieren' : 'Schon registriert? Login'}</button></form></div>;
+  async function submit(e: React.FormEvent) { e.preventDefault(); setError(''); try { const user = await signInUser(email, password, mode === 'register' ? displayName : undefined); onUser(user); } catch (err: any) { setError(err.message); } }
+  return <div className="auth"><form onSubmit={submit}><h1>{mode === 'login' ? 'Einloggen' : 'Registrieren'}</h1><p>Bitte gib deine eigenen Zugangsdaten ein.</p>{error && <div className="error">{error}</div>}{mode === 'register' && <label>Name<input required value={displayName} onChange={e => setDisplayName(e.target.value)} autoComplete="name" /></label>}<label>E-Mail<input required value={email} onChange={e => setEmail(e.target.value)} type="email" autoComplete="email" /></label><label>Passwort<input required minLength={6} value={password} onChange={e => setPassword(e.target.value)} type="password" autoComplete={mode === 'login' ? 'current-password' : 'new-password'} /></label><button className="primary" type="submit">{mode === 'login' ? 'Login' : 'Account erstellen'}</button><button type="button" className="link" onClick={() => setMode(mode === 'login' ? 'register' : 'login')}>{mode === 'login' ? 'Noch kein Konto? Registrieren' : 'Schon registriert? Login'}</button></form></div>;
 }
 
 function CreatePuzzlePanel({ images, refresh, nav, setActiveProject, setError }: any) {
