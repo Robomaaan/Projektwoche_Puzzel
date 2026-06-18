@@ -8,6 +8,11 @@ import { publicFilePath } from '../services/storageService.js';
 const router = Router();
 router.use(requireAuth);
 
+const mutableProjectSchema = z.object({
+  title: z.string().min(1).max(120).optional(),
+  visibility: z.enum(['private', 'public']).optional(),
+}).refine((value) => value.title !== undefined || value.visibility !== undefined, { message: 'Keine Änderungen übergeben' });
+
 const includeForUser = (userId: string) => ({
   image: true,
   configuration: true,
@@ -121,6 +126,22 @@ router.delete('/:id', async (req, res, next) => {
     if (!p) throw Object.assign(new Error('Puzzle nicht gefunden'), { status: 404 });
     await prisma.puzzleProject.delete({ where: { id: p.id } });
     res.json({ ok: true });
+  } catch (e) {
+    next(e);
+  }
+});
+
+router.patch('/:id', async (req, res, next) => {
+  try {
+    const body = mutableProjectSchema.parse(req.body);
+    const p = await prisma.puzzleProject.findFirst({ where: { id: req.params.id, ownerId: req.user!.id } });
+    if (!p) throw Object.assign(new Error('Puzzle nicht gefunden'), { status: 404 });
+    const updated = await prisma.puzzleProject.update({
+      where: { id: p.id },
+      data: body,
+      include: includeForUser(req.user!.id),
+    });
+    res.json({ project: serialize(updated) });
   } catch (e) {
     next(e);
   }

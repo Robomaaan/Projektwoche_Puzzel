@@ -222,3 +222,49 @@ Erneut ausgeführt:
 - `npm run test` PASS, Backend 5/5, Frontend 1/1
 - `npm run build` PASS
 - Browser-Smoke: Registrierung per UI erfolgreich; eingeloggter Nutzer sichtbar.
+
+
+## Vercel/Supabase Storage Upload-Grundlage - 2026-06-17
+
+Zusätzliche Nutzeranforderung umgesetzt:
+
+- Live-Bild-Upload nutzt jetzt Vercel API Routes unter `/api/images/*` statt lokalen Backend-Storage.
+- Upload, Liste und Löschen authentifizieren den eingeloggten Supabase-Nutzer per Bearer-Access-Token.
+- Serverseitig wird ausschließlich `SUPABASE_SERVICE_ROLE_KEY` in Vercel API Routes verwendet; der Browser erhält kein Service-Role-Secret.
+- Bilder werden persistent im Supabase Storage Bucket `puzzle-assets` gespeichert.
+- Bildmetadaten werden übergangsweise als JSON-Sidecar im selben User-Ordner gespeichert, bis die DB-/Prisma-Migration auf Supabase Postgres folgt.
+- Signed URLs werden für die Anzeige generiert, damit der Bucket privat bleiben kann.
+
+Erneut ausgeführt:
+
+- `npm install` PASS
+- `npm run typecheck` PASS
+- `npm run lint` PASS
+- `npm run test` PASS, Backend 5/5, Frontend 1/1
+- `npm run build` PASS
+
+Bekannte Grenze:
+
+- Puzzle-Generierung bleibt noch an der alten lokalen DB-/Backend-Logik; live ist in diesem Schritt der persistente Bild-Upload als Grundlage freigeschaltet.
+
+
+## Vercel/Supabase Postgres-Vorbereitung - 2026-06-17
+
+Zusätzliche Umsetzung:
+
+- Vercel API Routes nutzen jetzt einen gemeinsamen Supabase-Admin-Helfer für Secret-Prüfung, Auth-Token-Validierung, private Bucket-Konfiguration und JSON-/Fehlerantworten.
+- `/api/auth/register` bleibt funktional auf Supabase Auth, verwendet aber dieselbe serverseitige Admin-Initialisierung wie die Storage-Routen.
+- Neue `GET /api/health` Route meldet nur nicht-sensitive Konfigurationsflags und Runtime-Status für Vercel-API-Diagnose.
+- Supabase/Postgres-Zielschema für `image_uploads`, `puzzle_projects`, `puzzle_configurations`, `generated_puzzles`, `puzzle_pieces` und `saved_puzzle_states` in `docs/api/vercel-supabase-postgres.md` dokumentiert.
+- RLS-Policy-Skizze und Migrationspfad von Storage-Sidecars zu Postgres ergänzt.
+
+Erneut ausgeführt:
+
+- `node --check frontend/api/*.js frontend/api/auth/register.js frontend/api/images/*` PASS
+- `npm run lint` PASS
+- `npm run test` PASS, Backend 5/5, Frontend 1/1
+- `npm run build` PASS
+
+Bekannte Grenze:
+
+- Kein Remote-DB-Push in diesem Schritt: Das Postgres-Schema ist bewusst vorbereitend dokumentiert, damit ein Pooler-/Circuit-Breaker-Problem den bestehenden Supabase-Login und Storage-Upload nicht gefährdet.

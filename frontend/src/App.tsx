@@ -16,32 +16,83 @@ const supabase = SUPABASE_URL && SUPABASE_ANON_KEY ? createClient(SUPABASE_URL, 
 function fromSupabaseUser(u: SupabaseUser): UserT { return { id: u.id, email: u.email ?? '', displayName: (u.user_metadata?.displayName || u.user_metadata?.name || u.email?.split('@')[0] || 'Nutzer') as string, language: 'de', timezone: 'Europe/Berlin' }; }
 async function currentUser() { if (supabase) { const { data } = await supabase.auth.getUser(); return data.user ? fromSupabaseUser(data.user) : null; } const d = await api('/auth/me'); return d.user as UserT; }
 async function signOutUser() { if (supabase) { await supabase.auth.signOut(); return; } await api('/auth/logout', { method: 'POST' }); }
+export function friendlyAuthError(message: string, mode: 'login' | 'register') {
+  const text = String(message || '').toLowerCase();
+  if (text.includes('invalid login credentials')) return 'E-Mail oder Passwort stimmt nicht. Bitte prüfe deine Eingaben.';
+  if (text.includes('email not confirmed')) return 'Diese E-Mail ist noch nicht bestätigt. Bitte registriere den Account erneut oder prüfe dein Postfach.';
+  if (text.includes('already') || text.includes('registered') || text.includes('exists') || text.includes('bereits registriert')) return 'Diese E-Mail ist bereits registriert. Bitte wechsle zum Login.';
+  if (text.includes('fetch') || text.includes('network') || text.includes('failed to fetch')) return 'Backend nicht erreichbar. Bitte Verbindung prüfen und erneut versuchen.';
+  if (text.includes('supabase') && text.includes('konfiguriert')) return 'Supabase ist auf dem Server noch nicht vollständig konfiguriert.';
+  if (mode === 'register' && !message) return 'Registrierung konnte nicht abgeschlossen werden.';
+  return message || 'Login konnte nicht abgeschlossen werden.';
+}
 async function signInUser(email: string, password: string, displayName?: string) {
+  const mode = displayName !== undefined ? 'register' : 'login';
   if (supabase) {
     if (displayName !== undefined) {
-      const res = await fetch('/api/auth/register', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email, password, displayName }) });
+      let res: Response;
+      try {
+        res = await fetch('/api/auth/register', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email, password, displayName }) });
+      } catch {
+        throw new Error(friendlyAuthError('failed to fetch', 'register'));
+      }
       const created = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(created.error?.message || 'Registrierung konnte nicht abgeschlossen werden.');
+      if (!res.ok) {
+        const fallback = res.status === 404 ? 'Backend auf Vercel nicht verbunden. Registrierung ist aktuell nicht möglich.' : 'Registrierung konnte nicht abgeschlossen werden.';
+        throw new Error(friendlyAuthError(created.error?.message || fallback, 'register'));
+      }
     }
     const { data, error } = await supabase.auth.signInWithPassword({ email, password });
-    if (error) throw new Error(error.message);
-    if (!data.user) throw new Error('Login konnte nicht abgeschlossen werden.');
+    if (error) throw new Error(friendlyAuthError(error.message, mode));
+    if (!data.user) throw new Error(friendlyAuthError('', mode));
     return fromSupabaseUser(data.user);
   }
-  const data = await api('/auth/' + (displayName !== undefined ? 'register' : 'login'), { method: 'POST', body: JSON.stringify(displayName !== undefined ? { email, password, displayName } : { email, password }) });
-  return data.user as UserT;
+  try {
+    const data = await api('/auth/' + (displayName !== undefined ? 'register' : 'login'), { method: 'POST', body: JSON.stringify(displayName !== undefined ? { email, password, displayName } : { email, password }) });
+    return data.user as UserT;
+  } catch (error: any) {
+    throw new Error(friendlyAuthError(error.message, mode));
+  }
 }
 async function api(path: string, options: RequestInit = {}) {
   let res: Response;
   try {
-    res = await fetch(API + path, { credentials: 'include', headers: options.body instanceof FormData ? {} : { 'Content-Type': 'application/json' }, ...options });
+    const headers = new Headers(options.headers || undefined);
+    if (!(options.body instanceof FormData) && !headers.has('Content-Type')) headers.set('Content-Type', 'application/json');
+    if (supabase) {
+      const { data } = await supabase.auth.getSession();
+      if (data.session?.access_token) headers.set('Authorization', `Bearer ${data.session.access_token}`);
+    }
+    res = await fetch(API + path, { credentials: 'include', ...options, headers });
   } catch {
     throw new Error('Backend nicht erreichbar. Bitte API-URL/VITE_API_URL prüfen.');
   }
   const data = await res.json().catch(() => ({}));
-  if (!res.ok && API === '/api' && res.status === 404) throw new Error('Backend auf Vercel nicht verbunden. Bitte VITE_API_URL auf eine öffentliche Backend-URL setzen.');
+  if (!res.ok && (API === '/api' || API.endsWith('/api')) && res.status === 404) throw new Error('Backend auf Vercel nicht verbunden. Bitte VITE_API_URL auf eine öffentliche Backend-URL setzen.');
   if (!res.ok) throw new Error(data.error?.message || 'API Fehler');
   return data;
+}
+function assetUrl(url?: string) {
+  if (!url) return '';
+  if (/^https?:\/\//i.test(url) || url.startsWith('data:') || url.startsWith('blob:')) return url;
+  return 'http://localhost:8000' + url;
+}
+function getImageDimensions(file: File) {
+  return new Promise<{ width: number; height: number }>((resolve) => {
+    const img = new Image();
+    const objectUrl = URL.createObjectURL(file);
+    img.onload = () => { const dims = { width: img.naturalWidth, height: img.naturalHeight }; URL.revokeObjectURL(objectUrl); resolve(dims); };
+    img.onerror = () => { URL.revokeObjectURL(objectUrl); resolve({ width: 0, height: 0 }); };
+    img.src = objectUrl;
+  });
+}
+async function uploadImageFile(file: File) {
+  const dims = await getImageDimensions(file);
+  const fd = new FormData();
+  fd.append('image', file);
+  fd.append('width', String(dims.width));
+  fd.append('height', String(dims.height));
+  return api('/images/upload', { method: 'POST', body: fd });
 }
 function parseSnapshot(project: Project) {
   try { return project.savedState?.snapshotJson ? JSON.parse(project.savedState.snapshotJson) : {}; } catch { return {}; }
@@ -60,7 +111,7 @@ export function App() {
   useEffect(() => { document.body.dataset.theme = theme; localStorage.setItem('theme', theme); }, [theme]);
   useEffect(() => { currentUser().then(setUser).catch(() => setUser(null)).finally(() => setLoading(false)); }, []);
   useEffect(() => { if (user) { if (page === 'login' || page === 'register') { setPage('dashboard'); location.hash = 'dashboard'; } void refresh(); } }, [user]);
-  async function refresh() { if (supabase && API === '/api') { setImages([]); setProjects([]); return; } const [imgs, projs] = await Promise.all([api('/images').catch(() => ({ images: [] })), api('/puzzles').catch(() => ({ projects: [] }))]); setImages(imgs.images); setProjects(projs.projects); }
+  async function refresh() { const [imgs, projs] = await Promise.all([api('/images').catch(() => ({ images: [] })), api('/puzzles').catch(() => ({ projects: [] }))]); setImages(imgs.images); setProjects(projs.projects); }
   function nav(p: string) { setPage(p); location.hash = p; setError(''); }
   async function logout() { await signOutUser(); setUser(null); setPage('login'); }
 
@@ -74,9 +125,25 @@ function ThemeToggle({ theme, setTheme }: { theme: 'light' | 'dark'; setTheme: (
 function Nav(p: { icon: React.ReactNode; label: string; page: string; cur: string; nav: (x: string) => void }) { return <button className={p.cur === p.page ? 'active' : ''} onClick={() => p.nav(p.page)}>{p.icon}<span>{p.label}</span></button>; }
 
 function AuthPage({ mode, setMode, onUser }: { mode: string; setMode: (m: string) => void; onUser: (u: UserT) => void }) {
-  const [email, setEmail] = useState(''), [password, setPassword] = useState(''), [displayName, setDisplayName] = useState(''), [error, setError] = useState('');
-  async function submit(e: React.FormEvent) { e.preventDefault(); setError(''); try { const user = await signInUser(email, password, mode === 'register' ? displayName : undefined); onUser(user); } catch (err: any) { setError(err.message); } }
-  return <div className="auth"><form onSubmit={submit}><h1>{mode === 'login' ? 'Einloggen' : 'Registrieren'}</h1><p>Bitte gib deine eigenen Zugangsdaten ein.</p>{error && <div className="error">{error}</div>}{mode === 'register' && <label>Name<input required value={displayName} onChange={e => setDisplayName(e.target.value)} autoComplete="name" /></label>}<label>E-Mail<input required value={email} onChange={e => setEmail(e.target.value)} type="email" autoComplete="email" /></label><label>Passwort<input required minLength={6} value={password} onChange={e => setPassword(e.target.value)} type="password" autoComplete={mode === 'login' ? 'current-password' : 'new-password'} /></label><button className="primary" type="submit">{mode === 'login' ? 'Login' : 'Account erstellen'}</button><button type="button" className="link" onClick={() => setMode(mode === 'login' ? 'register' : 'login')}>{mode === 'login' ? 'Noch kein Konto? Registrieren' : 'Schon registriert? Login'}</button></form></div>;
+  const [email, setEmail] = useState(''), [password, setPassword] = useState(''), [displayName, setDisplayName] = useState(''), [error, setError] = useState(''), [busy, setBusy] = useState(false);
+  const authMode = mode === 'register' ? 'register' : 'login';
+  function switchMode(next: 'login' | 'register') { setError(''); setMode(next); location.hash = next; }
+  async function submit(e: React.FormEvent) {
+    e.preventDefault();
+    if (busy) return;
+    setBusy(true);
+    setError('');
+    try {
+      const user = await signInUser(email.trim(), password, authMode === 'register' ? displayName.trim() : undefined);
+      onUser(user);
+      location.hash = 'dashboard';
+    } catch (err: any) {
+      setError(friendlyAuthError(err.message, authMode));
+    } finally {
+      setBusy(false);
+    }
+  }
+  return <div className="auth"><form onSubmit={submit}><h1>{authMode === 'login' ? 'Einloggen' : 'Registrieren'}</h1><p>Bitte gib deine eigenen Zugangsdaten ein.</p>{error && <div className="error" role="alert">{error}</div>}{authMode === 'register' && <label>Name<input required value={displayName} onChange={e => setDisplayName(e.target.value)} autoComplete="name" disabled={busy} /></label>}<label>E-Mail<input required value={email} onChange={e => setEmail(e.target.value)} type="email" autoComplete="email" disabled={busy} /></label><label>Passwort<input required minLength={6} value={password} onChange={e => setPassword(e.target.value)} type="password" autoComplete={authMode === 'login' ? 'current-password' : 'new-password'} disabled={busy} /></label><button className="primary" type="submit" disabled={busy}>{busy ? 'Bitte warten…' : authMode === 'login' ? 'Login' : 'Account erstellen'}</button><button type="button" className="link" disabled={busy} onClick={() => switchMode(authMode === 'login' ? 'register' : 'login')}>{authMode === 'login' ? 'Noch kein Konto? Registrieren' : 'Schon registriert? Login'}</button></form></div>;
 }
 
 function CreatePuzzlePanel({ images, refresh, nav, setActiveProject, setError }: any) {
@@ -88,23 +155,28 @@ function CreatePuzzlePanel({ images, refresh, nav, setActiveProject, setError }:
 
 function Dashboard({ user, images, projects, refresh, nav, setActiveProject, setError }: any) {
   const fileRef = useRef<HTMLInputElement>(null); const own = projects.filter((p: Project) => p.ownerId === user.id); const published = own.filter((p: Project) => p.visibility === 'public').length; const drafts = own.filter((p: Project) => p.status !== 'generated').length;
-  async function upload(f?: File) { if (!f) return; const fd = new FormData(); fd.append('image', f); try { await api('/images/upload', { method: 'POST', body: fd }); await refresh(); } catch (e: any) { setError(e.message); } }
+  async function upload(f?: File) { if (!f) return; try { await uploadImageFile(f); await refresh(); } catch (e: any) { setError(e.message); } }
   return <><header className="top"><div><h1>Willkommen zurück, {user.displayName}!</h1><p>Hier ist dein echter Puzzle-Überblick aus der Datenbank.</p></div><button className="primary" onClick={() => images.length ? document.getElementById('creator')?.scrollIntoView({ behavior: 'smooth' }) : fileRef.current?.click()}>+ Neues Puzzle erstellen</button></header><div className="kpis">{[['Puzzles insgesamt', own.length], ['Für alle Nutzer', published], ['Entwürfe', drafts], ['Hochgeladene Bilder', images.length]].map(x => <div className="kpi" key={x[0]}><b>{x[1]}</b><span>{x[0]}</span></div>)}</div><div className="drop" onClick={() => fileRef.current?.click()} onDragOver={e => e.preventDefault()} onDrop={e => { e.preventDefault(); void upload(e.dataTransfer.files[0]); }}><Upload /><b>Bild hochladen</b><span>JPG/PNG/WEBP bis 10 MB</span><input hidden ref={fileRef} type="file" accept="image/*" onChange={e => upload(e.target.files?.[0])} /></div>{images.length > 0 && <div id="creator"><CreatePuzzlePanel images={images} refresh={refresh} nav={nav} setActiveProject={setActiveProject} setError={setError} /></div>}<h2>Deine letzten Puzzles <button className="link" onClick={() => nav('puzzles')}>Alle anzeigen</button></h2><div className="grid cards">{own.slice(0, 4).map((p: Project) => <PuzzleCard key={p.id} p={p} currentUserId={user.id} onClick={() => { setActiveProject(p); nav('play'); }} />)}</div>{own.length === 0 && <p className="empty">Noch keine eigenen Puzzles. Lade ein Bild hoch und erstelle dein erstes Puzzle.</p>}</>;
 }
 
 function Images({ images, refresh, setError }: any) {
   const [q, setQ] = useState(''), [sort, setSort] = useState('new'), [grid, setGrid] = useState(true); const ref = useRef<HTMLInputElement>(null);
   const list = useMemo(() => images.filter((i: ImageT) => i.originalFileName.toLowerCase().includes(q.toLowerCase())).sort((a: ImageT, b: ImageT) => sort === 'new' ? Date.parse(b.createdAt) - Date.parse(a.createdAt) : Date.parse(a.createdAt) - Date.parse(b.createdAt)), [images, q, sort]);
-  async function upload(f?: File) { if (!f) return; const fd = new FormData(); fd.append('image', f); try { await api('/images/upload', { method: 'POST', body: fd }); await refresh(); } catch (e: any) { setError(e.message); } }
+  async function upload(f?: File) { if (!f) return; try { await uploadImageFile(f); await refresh(); } catch (e: any) { setError(e.message); } }
   async function del(id: string) { if (confirm('Bild wirklich löschen?')) { await api('/images/' + id, { method: 'DELETE' }); await refresh(); } }
-  return <><header className="top"><h1>Bildverwaltung</h1><button className="primary" onClick={() => ref.current?.click()}>+ Bilder hochladen</button><input hidden ref={ref} type="file" accept="image/*" onChange={e => upload(e.target.files?.[0])} /></header><div className="toolbar"><input placeholder="Suche" value={q} onChange={e => setQ(e.target.value)} /><select><option>Eigene Bilder</option></select><select value={sort} onChange={e => setSort(e.target.value)}><option value="new">Neueste</option><option value="old">Älteste</option></select><button onClick={() => setGrid(!grid)}><Grid2X2 /> {grid ? 'Grid' : 'List'}</button></div><div className={grid ? 'imagegrid' : 'imagelist'}>{list.map((i: ImageT) => <div className="imagecard" key={i.id}><a href={'http://localhost:8000' + i.url} target="_blank"><img src={'http://localhost:8000' + i.url} /></a><b>{i.originalFileName}</b><small>{i.width}×{i.height} · {i.status}</small><button onClick={() => del(i.id)}>Löschen</button></div>)}</div>{!list.length && <p className="empty">Keine Beispielbilder mehr: Hier erscheinen nur echte Bilder aus deiner Datenbank.</p>}</>;
+  return <><header className="top"><h1>Bildverwaltung</h1><button className="primary" onClick={() => ref.current?.click()}>+ Bilder hochladen</button><input hidden ref={ref} type="file" accept="image/*" onChange={e => upload(e.target.files?.[0])} /></header><div className="toolbar"><input placeholder="Suche" value={q} onChange={e => setQ(e.target.value)} /><select><option>Eigene Bilder</option></select><select value={sort} onChange={e => setSort(e.target.value)}><option value="new">Neueste</option><option value="old">Älteste</option></select><button onClick={() => setGrid(!grid)}><Grid2X2 /> {grid ? 'Grid' : 'List'}</button></div><div className={grid ? 'imagegrid' : 'imagelist'}>{list.map((i: ImageT) => <div className="imagecard" key={i.id}><a href={assetUrl(i.url)} target="_blank"><img src={assetUrl(i.url)} /></a><b>{i.originalFileName}</b><small>{i.width}×{i.height} · {i.status}</small><button onClick={() => del(i.id)}>Löschen</button></div>)}</div>{!list.length && <p className="empty">Keine Beispielbilder mehr: Hier erscheinen nur echte Bilder aus deiner Datenbank.</p>}</>;
 }
 
 function Puzzles({ user, projects, images, refresh, nav, setActiveProject, setError }: any) {
   async function del(id: string) { if (confirm('Puzzle löschen?')) { await api('/puzzles/' + id, { method: 'DELETE' }); await refresh(); } }
-  return <><header className="top"><h1>Puzzles</h1></header>{images.length > 0 && <CreatePuzzlePanel images={images} refresh={refresh} nav={nav} setActiveProject={setActiveProject} setError={setError} />}<div className="grid cards">{projects.map((p: Project) => <PuzzleCard key={p.id} p={p} currentUserId={user.id} onClick={() => { setActiveProject(p); nav('play'); }} onDelete={p.ownerId === user.id ? () => del(p.id) : undefined} />)}</div>{!projects.length && <p className="empty">Noch keine Puzzles. Lade ein Bild hoch und erstelle dein erstes Puzzle.</p>}</>;
+  async function toggleVisibility(p: Project) {
+    const next = p.visibility === 'public' ? 'private' : 'public';
+    try { await api('/puzzles/' + p.id, { method: 'PATCH', body: JSON.stringify({ visibility: next }) }); await refresh(); }
+    catch (e: any) { setError(e.message); }
+  }
+  return <><header className="top"><h1>Puzzles</h1></header>{images.length > 0 && <CreatePuzzlePanel images={images} refresh={refresh} nav={nav} setActiveProject={setActiveProject} setError={setError} />}<div className="grid cards">{projects.map((p: Project) => <PuzzleCard key={p.id} p={p} currentUserId={user.id} onClick={() => { setActiveProject(p); nav('play'); }} onDelete={p.ownerId === user.id ? () => del(p.id) : undefined} onToggleVisibility={p.ownerId === user.id ? () => toggleVisibility(p) : undefined} />)}</div>{!projects.length && <p className="empty">Noch keine Puzzles. Lade ein Bild hoch und erstelle dein erstes Puzzle.</p>}</>;
 }
-function PuzzleCard({ p, onClick, onDelete, currentUserId }: any) { return <div className="pcard" onClick={onClick}>{p.generated?.previewUrl && <img src={'http://localhost:8000' + p.generated.previewUrl} />}<b>{p.title}</b><span className={p.visibility === 'public' ? 'pill green' : 'pill purple'}>{p.visibility === 'public' ? 'Für alle Nutzer' : 'Privat'}</span><small>{p.ownerId === currentUserId ? 'Eigenes Puzzle' : 'Öffentliches Puzzle'} · {Math.round(p.savedState?.progressPercent ?? 0)}% Fortschritt</small>{onDelete && <button onClick={(e) => { e.stopPropagation(); onDelete(); }}>Löschen</button>}</div>; }
+function PuzzleCard({ p, onClick, onDelete, onToggleVisibility, currentUserId }: any) { return <div className="pcard" onClick={onClick}>{p.generated?.previewUrl && <img src={assetUrl(p.generated.previewUrl)} />}<b>{p.title}</b><span className={p.visibility === 'public' ? 'pill green' : 'pill purple'}>{p.visibility === 'public' ? 'Für alle Nutzer' : 'Privat'}</span><small>{p.ownerId === currentUserId ? 'Eigenes Puzzle' : 'Öffentliches Puzzle'} · {Math.round(p.savedState?.progressPercent ?? 0)}% Fortschritt</small>{onToggleVisibility && <button onClick={(e) => { e.stopPropagation(); onToggleVisibility(); }}>{p.visibility === 'public' ? 'Privat schalten' : 'Für alle freigeben'}</button>}{onDelete && <button onClick={(e) => { e.stopPropagation(); onDelete(); }}>Löschen</button>}</div>; }
 
 
 function edgeSign(a: number, b: number) { return ((a * 37 + b * 17 + 11) % 2 === 0) ? 1 : -1; }
@@ -162,7 +234,7 @@ function Play({ project, refresh, nav, setError }: any) {
   const pieceW = 900 / cfg.columns, pieceH = 600 / cfg.rows;
   const knob = Math.min(pieceW, pieceH) * 0.24;
   const snap = parseSnapshot(project);
-  const previewUrl = `http://localhost:8000${project.generated?.previewUrl}`;
+  const previewUrl = assetUrl(project.generated?.previewUrl);
   const [zoom, setZoom] = useState(Math.round((snap.zoom ?? 0.88) * 100));
   const [seconds, setSeconds] = useState(snap.timerSeconds ?? 0);
   const [saved, setSaved] = useState('Bereit');
