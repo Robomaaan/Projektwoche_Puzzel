@@ -34,6 +34,3 @@ Der vollständige QA-Bericht liegt unter `docs/qa/test_report.md`.
 - Passwörter werden mit Argon2id gehasht.
 - Private Ressourcen prüfen Ownership serverseitig.
 - Lokale DB-Dateien, Uploads, generierte Assets, Logs, `.env`, `node_modules` und Builds werden nicht committet.
-
-## Version-Snapshots
-Technische Meilenstein-Snapshots liegen unter `versions/v01_spec_only` bis `versions/v13_final_demo_ready`. Diese Ordner sind Projektstände/Dokumentationsstände und keine manipulierte Git-Historie.
