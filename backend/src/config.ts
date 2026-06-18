@@ -8,4 +8,9 @@ export const config = {
   allowedOrigins: (process.env.ALLOWED_ORIGINS ?? defaultOrigins.join(',')).split(',').map((s) => s.trim()).filter(Boolean),
   cookieName: 'puzzlestudio_session',
   crossSiteCookies: process.env.CROSS_SITE_COOKIES === 'true',
+  supabase: {
+    url: process.env.SUPABASE_URL?.replace(/\/$/, '') || '',
+    serviceRoleKey: process.env.SUPABASE_SERVICE_ROLE_KEY || '',
+    storageBucket: process.env.SUPABASE_STORAGE_BUCKET || '',
+  },
 };

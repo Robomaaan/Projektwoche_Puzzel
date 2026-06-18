@@ -2,6 +2,7 @@ node_modules/
 dist/
 .env
 .env.*
+!.env.example
 *.sqlite
 *.sqlite-journal
 *.sqlite-wal
@@ -9,8 +10,10 @@ dist/
 backend/storage/uploads/*
 backend/storage/generated/*
 backend/storage/previews/*
+backend/storage/supabase-cache/*
 !backend/storage/uploads/.gitkeep
 !backend/storage/generated/.gitkeep
 !backend/storage/previews/.gitkeep
+!backend/storage/supabase-cache/.gitkeep
 .DS_Store
 .vercel
