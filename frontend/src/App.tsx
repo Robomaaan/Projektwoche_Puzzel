@@ -169,9 +169,14 @@ function Images({ images, refresh, setError }: any) {
 
 function Puzzles({ user, projects, images, refresh, nav, setActiveProject, setError }: any) {
   async function del(id: string) { if (confirm('Puzzle löschen?')) { await api('/puzzles/' + id, { method: 'DELETE' }); await refresh(); } }
-  return <><header className="top"><h1>Puzzles</h1></header>{images.length > 0 && <CreatePuzzlePanel images={images} refresh={refresh} nav={nav} setActiveProject={setActiveProject} setError={setError} />}<div className="grid cards">{projects.map((p: Project) => <PuzzleCard key={p.id} p={p} currentUserId={user.id} onClick={() => { setActiveProject(p); nav('play'); }} onDelete={p.ownerId === user.id ? () => del(p.id) : undefined} />)}</div>{!projects.length && <p className="empty">Noch keine Puzzles. Lade ein Bild hoch und erstelle dein erstes Puzzle.</p>}</>;
+  async function toggleVisibility(p: Project) {
+    const next = p.visibility === 'public' ? 'private' : 'public';
+    try { await api('/puzzles/' + p.id, { method: 'PATCH', body: JSON.stringify({ visibility: next }) }); await refresh(); }
+    catch (e: any) { setError(e.message); }
+  }
+  return <><header className="top"><h1>Puzzles</h1></header>{images.length > 0 && <CreatePuzzlePanel images={images} refresh={refresh} nav={nav} setActiveProject={setActiveProject} setError={setError} />}<div className="grid cards">{projects.map((p: Project) => <PuzzleCard key={p.id} p={p} currentUserId={user.id} onClick={() => { setActiveProject(p); nav('play'); }} onDelete={p.ownerId === user.id ? () => del(p.id) : undefined} onToggleVisibility={p.ownerId === user.id ? () => toggleVisibility(p) : undefined} />)}</div>{!projects.length && <p className="empty">Noch keine Puzzles. Lade ein Bild hoch und erstelle dein erstes Puzzle.</p>}</>;
 }
-function PuzzleCard({ p, onClick, onDelete, currentUserId }: any) { return <div className="pcard" onClick={onClick}>{p.generated?.previewUrl && <img src={assetUrl(p.generated.previewUrl)} />}<b>{p.title}</b><span className={p.visibility === 'public' ? 'pill green' : 'pill purple'}>{p.visibility === 'public' ? 'Für alle Nutzer' : 'Privat'}</span><small>{p.ownerId === currentUserId ? 'Eigenes Puzzle' : 'Öffentliches Puzzle'} · {Math.round(p.savedState?.progressPercent ?? 0)}% Fortschritt</small>{onDelete && <button onClick={(e) => { e.stopPropagation(); onDelete(); }}>Löschen</button>}</div>; }
+function PuzzleCard({ p, onClick, onDelete, onToggleVisibility, currentUserId }: any) { return <div className="pcard" onClick={onClick}>{p.generated?.previewUrl && <img src={assetUrl(p.generated.previewUrl)} />}<b>{p.title}</b><span className={p.visibility === 'public' ? 'pill green' : 'pill purple'}>{p.visibility === 'public' ? 'Für alle Nutzer' : 'Privat'}</span><small>{p.ownerId === currentUserId ? 'Eigenes Puzzle' : 'Öffentliches Puzzle'} · {Math.round(p.savedState?.progressPercent ?? 0)}% Fortschritt</small>{onToggleVisibility && <button onClick={(e) => { e.stopPropagation(); onToggleVisibility(); }}>{p.visibility === 'public' ? 'Privat schalten' : 'Für alle freigeben'}</button>}{onDelete && <button onClick={(e) => { e.stopPropagation(); onDelete(); }}>Löschen</button>}</div>; }
 
 
 function edgeSign(a: number, b: number) { return ((a * 37 + b * 17 + 11) % 2 === 0) ? 1 : -1; }
